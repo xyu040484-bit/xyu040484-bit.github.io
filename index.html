@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>xianyu | 个人主页</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="name">xianyu</div>
+        <div class="tagline">摄影 / 3D 打印 / 羽毛球 / AI</div>
+      </div>
+
+      <nav class="nav">
+        <a href="#home">首页</a>
+        <a href="#hobby">摄影&3D打印</a>
+        <a href="#notes">闲时笔谈</a>
+        <a href="#contact">联系</a>
+      </nav>
+
+      <div class="avatar-wrap" title="头像">
+        <img src="avatar.jpg" alt="头像" class="avatar" />
+      </div>
+    </div>
+    <div class="divider"></div>
+  </header>
+
+  <main class="snap" id="snap">
+    <!-- 首页 -->
+    <section id="home" class="section" data-bg="linear-gradient(135deg,#eef2ff,#e2e8ff)">
+      <div class="container">
+        <div class="card hero">
+          <h1>你好，我是 xianyu</h1>
+          <p class="lead">欢迎你的到来。我会在这里逐步放上我的作品、笔记和一些小想法。</p>
+          <p class="muted">温馨提示：滚轮会按屏翻页；你也可以点导航跳到对应板块。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 摄影&3D打印 -->
+    <section id="hobby" class="section" data-bg="linear-gradient(135deg,#e7f0ff,#f3f7ff)">
+      <div class="container">
+        <div class="card">
+          <h2>我的兴趣入口</h2>
+          <p class="muted">点击下面的卡片会弹出一个“界面”，或许在这里你会有些惊奇的发现。</p>
+
+          <div class="grid2">
+            <button class="tile" type="button" data-modal="modal-photo">
+              <div class="tile-title">摄影</div>
+              <div class="tile-desc">照片 / 器材 / 记录</div>
+            </button>
+
+            <button class="tile" type="button" data-modal="modal-print">
+              <div class="tile-title">3D 打印</div>
+              <div class="tile-desc">模型 / 参数 / 成品</div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 闲时笔谈 -->
+    <section id="notes" class="section" data-bg="linear-gradient(135deg,#e9fff4,#f4fffb)">
+      <div class="container">
+        <div class="card">
+          <h2>我的闲时笔谈</h2>
+          <p class="muted">中间内容区可单独滚动；左右是我的两个兴趣爱好的侧栏。</p>
+
+          <div class="tri">
+            <!-- 左：羽毛球 -->
+            <aside class="side">
+              <div class="side-title">羽毛球</div>
+              <div class="side-body">
+                <p>目前状态：维持低频但稳定的运行。技术虽未精通，但对羽毛球运动保持长期的兴趣输出与体能维护。</p>
+                <p class="muted">ps：（实则是菜的没眼看了，憋了半天才出来这么一句。）</p>
+              </div>
+            </aside>
+
+            <!-- 中：笔谈滚动区 -->
+            <article class="center-scroll" aria-label="闲时笔谈内容区">
+              <div class="center-title">
+                闲时笔谈（可滚动）
+                <button class="mini-btn" type="button" data-modal="modal-notes">放大</button>
+              </div>
+
+              <!-- ✅ 注意：所有内容都必须放在 center-body 里 -->
+              <div class="center-body">
+                <p><a href="notes/2026.1.18闲时笔谈1.html">2026-01-18｜2026.1.18闲时笔谈1</a></p>
+                <p>……</p>
+                <p>……</p>
+                <p>……</p>
+                <p>……</p>
+                <p>……</p>
+                <p>……</p>
+                <p>……</p>
+              </div>
+            </article>
+
+            <!-- 右：AI -->
+            <aside class="side">
+              <div class="side-title">AI</div>
+              <div class="side-body">
+                <p>关于AI：我是 AI 技术的坚定支持者。我认为 AI 不仅仅是工具，更是生产力逻辑的重构者。</p>
+                <p class="muted">ps：（chatgpt 和 Gemini 是真好用。）手动狗头car</p>
+              </div>
+            </aside>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- 联系 -->
+    <section id="contact" class="section" data-bg="linear-gradient(135deg,#fff2e9,#fff8f3)">
+      <div class="container">
+        <div class="card">
+          <h2>联系我</h2>
+          <p class="muted">邮箱：</p>
+
+          <div class="email-list">
+            <a class="email" href="mailto:xyu040484@gmail.com">xyu040484@gmail.com</a>
+            <a class="email" href="mailto:1444134749@qq.com">1444134749@qq.com</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 摄影弹窗 -->
+  <div class="modal" id="modal-photo" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-label="摄影">
+      <div class="modal-head">
+        <div class="modal-title">摄影</div>
+        <button class="icon-btn" type="button" data-close aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <p>Hello，这里是摄影</p>
+        <p class="muted">ps：（由于本人出片基本没有，我甚至怀疑这到底是不是人能拍出来的东西所以更新速度极慢，且看且珍惜）</p>
+        <hr />
+        <p>占位内容：当前为空。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3D 打印弹窗 -->
+  <div class="modal" id="modal-print" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-label="3D 打印">
+      <div class="modal-head">
+        <div class="modal-title">3D 打印</div>
+        <button class="icon-btn" type="button" data-close aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <p>欢迎来到3D打印界面。（手动撒花）</p>
+        <p class="muted">ps：（对于3D打印我感觉是真的还不错，建议人手一台，在这里我会更新我的3D打印作品）</p>
+        <hr />
+        <p>占位内容：当前为空。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 闲时笔谈放大弹窗 -->
+  <div class="modal" id="modal-notes" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-label="闲时笔谈">
+      <div class="modal-head">
+        <div class="modal-title">闲时笔谈</div>
+        <button class="icon-btn" type="button" data-close aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body" id="notes-modal-body"></div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
