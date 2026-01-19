@@ -6,6 +6,62 @@
   function qsa(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
 
   // =========================
+  // A+B：手机点击蓝色高亮 / 蓝色选中块（JS 补丁）
+  // =========================
+  function setupNoBlueSelectionOnTap() {
+    const INTERACTIVE = "button, a, .tile, .icon-btn, .mini-btn, .nav a";
+
+    // 阻止交互元素触发“选中开始”
+    document.addEventListener("selectstart", (e) => {
+      if (e.target && e.target.closest && e.target.closest(INTERACTIVE)) {
+        e.preventDefault();
+      }
+    });
+
+    // 点击/触摸交互元素后：清掉可能出现的选中高亮 + 取消焦点
+    const clearSel = () => {
+      const sel = window.getSelection && window.getSelection();
+      if (sel && sel.removeAllRanges) sel.removeAllRanges();
+    };
+
+    document.addEventListener("pointerup", (e) => {
+      const hit = e.target && e.target.closest && e.target.closest(INTERACTIVE);
+      if (!hit) return;
+
+      clearSel();
+
+      // 取消焦点，避免浏览器保留“高亮状态”
+      setTimeout(() => {
+        if (document.activeElement && document.activeElement.blur) {
+          document.activeElement.blur();
+        }
+      }, 0);
+    });
+
+    // ✅ B：在可滚动区域拖动时，临时禁用选中（防止弹窗内容被选中出现蓝块）
+    const isEditable = (el) =>
+      el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+
+    document.addEventListener("touchstart", (e) => {
+      const t = e.target;
+      if (isEditable(t)) return;
+
+      // 只在这些区域触发：弹窗内容 / 中间笔谈滚动区
+      if (t && t.closest && (t.closest(".modal-panel") || t.closest(".center-scroll"))) {
+        document.body.classList.add("no-select");
+      }
+    }, { passive: true });
+
+    document.addEventListener("touchend", () => {
+      document.body.classList.remove("no-select");
+    }, { passive: true });
+
+    document.addEventListener("touchcancel", () => {
+      document.body.classList.remove("no-select");
+    }, { passive: true });
+  }
+
+  // =========================
   // Modal（含“闲时笔谈”同步）
   // =========================
   function openModal(modal) {
@@ -17,8 +73,8 @@
 
     // ✅ 打开“闲时笔谈”弹窗：把中间内容同步进去
     if (modal.id === "modal-notes") {
-      const src = document.querySelector(".center-body");
-      const dst = document.querySelector("#notes-modal-body");
+      const src = qs(".center-body");
+      const dst = qs("#notes-modal-body");
 
       if (!src) {
         console.warn("[notes sync] 没找到 .center-body（检查 index.html 结构：笔谈内容必须在 .center-body 里）");
@@ -37,11 +93,11 @@
   function closeModal(modal) {
     if (!modal) return;
 
-    // ✅ 可选：如果你希望“放大弹窗里改了内容，关闭后同步回小窗”，取消注释下面这段
+    // 如果你希望“放大弹窗里改了内容，关闭后同步回小窗”，可取消注释：
     /*
     if (modal.id === "modal-notes") {
-      const src = document.querySelector("#notes-modal-body");
-      const dst = document.querySelector(".center-body");
+      const src = qs("#notes-modal-body");
+      const dst = qs(".center-body");
       if (src && dst) dst.innerHTML = src.innerHTML;
     }
     */
@@ -55,7 +111,10 @@
   // 背景 Cross-fade（丝滑）
   // =========================
   function createBgFader() {
-    let current = getComputedStyle(document.documentElement).getPropertyValue("--page-bg").trim();
+    let current = getComputedStyle(document.documentElement)
+      .getPropertyValue("--page-bg")
+      .trim();
+
     let transitioning = false;
 
     function setVar(name, val) {
@@ -76,7 +135,9 @@
       setVar("--page-bg-next", nextBg);
       document.body.classList.add("bg-fading");
 
-      const ms = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--bg-fade-ms")) || 900;
+      const ms =
+        parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--bg-fade-ms")) ||
+        900;
 
       setTimeout(() => {
         current = nextBg;
@@ -97,29 +158,33 @@
     const snap = qs("#snap");
     if (!center || !snap) return;
 
-    center.addEventListener("wheel", (e) => {
-      if (qs(".modal.open")) return;
+    center.addEventListener(
+      "wheel",
+      (e) => {
+        if (qs(".modal.open")) return;
 
-      const dy = e.deltaY;
-      if (Math.abs(dy) < 1) return;
+        const dy = e.deltaY;
+        if (Math.abs(dy) < 1) return;
 
-      const atTop = center.scrollTop <= 0;
-      const atBottom = center.scrollTop + center.clientHeight >= center.scrollHeight - 1;
+        const atTop = center.scrollTop <= 0;
+        const atBottom = center.scrollTop + center.clientHeight >= center.scrollHeight - 1;
 
-      const scrollingDown = dy > 0;
-      const scrollingUp = dy < 0;
+        const scrollingDown = dy > 0;
+        const scrollingUp = dy < 0;
 
-      const canScrollDown = !atBottom;
-      const canScrollUp = !atTop;
+        const canScrollDown = !atBottom;
+        const canScrollUp = !atTop;
 
-      // 如果 center 还能滚，就截断事件，避免外层翻页
-      if ((scrollingDown && canScrollDown) || (scrollingUp && canScrollUp)) {
-        e.preventDefault();
-        e.stopPropagation();
-        center.scrollTop += dy;
-      }
-      // 到顶/到底：放行，继续滚会触发外层翻页
-    }, { passive: false });
+        // 如果 center 还能滚，就截断事件，避免外层翻页
+        if ((scrollingDown && canScrollDown) || (scrollingUp && canScrollUp)) {
+          e.preventDefault();
+          e.stopPropagation();
+          center.scrollTop += dy;
+        }
+        // 到顶/到底：放行，继续滚会触发外层翻页
+      },
+      { passive: false }
+    );
   }
 
   // =========================
@@ -136,11 +201,16 @@
 
     function nearestIndex() {
       const probeY = 140; // 判定“当前屏”的位置
-      let idx = 0, best = Infinity;
+      let idx = 0,
+        best = Infinity;
+
       sections.forEach((sec, i) => {
         const r = sec.getBoundingClientRect();
         const d = Math.abs(r.top - probeY);
-        if (d < best) { best = d; idx = i; }
+        if (d < best) {
+          best = d;
+          idx = i;
+        }
       });
       return idx;
     }
@@ -157,11 +227,15 @@
 
     // 滚动条/触控板拖动时也跟随切背景（rAF 降频）
     let raf = 0;
-    snap.addEventListener("scroll", () => {
-      if (qs(".modal.open")) return;
-      if (raf) cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => applyBgByIndex(nearestIndex()));
-    }, { passive: true });
+    snap.addEventListener(
+      "scroll",
+      () => {
+        if (qs(".modal.open")) return;
+        if (raf) cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => applyBgByIndex(nearestIndex()));
+      },
+      { passive: true }
+    );
 
     // 滚轮强制翻页（每次一屏）
     let locked = false;
@@ -172,39 +246,54 @@
       const target = sections[idx];
       if (!target) return;
 
-      applyBgByIndex(idx); // 翻页前先切背景，更跟手
+      applyBgByIndex(idx); // 翻页前先切背景
       target.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
-    snap.addEventListener("wheel", (e) => {
-      // 如果滚轮发生在 center-scroll，已经被 setupCenterWheelScroll 截断，不会到这里
-      if (qs(".modal.open")) return;
+    snap.addEventListener(
+      "wheel",
+      (e) => {
+        // 如果滚轮发生在 center-scroll，会被 setupCenterWheelScroll 截断，不会到这里
+        if (qs(".modal.open")) return;
 
-      const now = Date.now();
-      if (locked) { e.preventDefault(); return; }
+        const now = Date.now();
+        if (locked) {
+          e.preventDefault();
+          return;
+        }
 
-      const dy = e.deltaY;
-      if (Math.abs(dy) < 12) return;
+        const dy = e.deltaY;
+        if (Math.abs(dy) < 12) return;
 
-      // 节流：防止连翻太快
-      if (now - lastTs < 650) { e.preventDefault(); return; }
-      lastTs = now;
+        // 节流：防止连翻太快
+        if (now - lastTs < 650) {
+          e.preventDefault();
+          return;
+        }
+        lastTs = now;
 
-      locked = true;
-      e.preventDefault();
+        locked = true;
+        e.preventDefault();
 
-      const idx = nearestIndex();
-      const next = dy > 0 ? idx + 1 : idx - 1;
-      scrollToIndex(next);
+        const idx = nearestIndex();
+        const next = dy > 0 ? idx + 1 : idx - 1;
+        scrollToIndex(next);
 
-      setTimeout(() => { locked = false; }, 700);
-    }, { passive: false });
+        setTimeout(() => {
+          locked = false;
+        }, 700);
+      },
+      { passive: false }
+    );
   }
 
   // =========================
   // 启动
   // =========================
   document.addEventListener("DOMContentLoaded", () => {
+    // ✅ 先初始化：手机蓝色高亮/选中修复（只需一次）
+    setupNoBlueSelectionOnTap();
+
     // 打开 modal（tile / mini-btn 都走 data-modal）
     const openers = qsa("[data-modal]");
     openers.forEach((btn) => {
@@ -212,38 +301,8 @@
         const id = btn.getAttribute("data-modal");
         if (!id) return;
         openModal(qs("#" + id));
-        setupNoBlueSelectionOnTap();
       });
     });
-// ===== 手机点击蓝色选中：B 方案（JS）=====
-function setupNoBlueSelectionOnTap() {
-  const INTERACTIVE = "button, a, .tile, .icon-btn, .mini-btn, .nav a";
-
-  // 阻止交互元素触发“选中开始”
-  document.addEventListener("selectstart", (e) => {
-    if (e.target && e.target.closest && e.target.closest(INTERACTIVE)) {
-      e.preventDefault();
-    }
-  });
-
-  // 点/触摸交互元素后，清掉可能出现的选中高亮 + 取消焦点
-  const clearSel = () => {
-    const sel = window.getSelection && window.getSelection();
-    if (sel && sel.removeAllRanges) sel.removeAllRanges();
-  };
-
-  document.addEventListener("pointerup", (e) => {
-    if (e.target && e.target.closest && e.target.closest(INTERACTIVE)) {
-      clearSel();
-      // 取消焦点，避免某些浏览器给链接/按钮留一个“高亮状态”
-      setTimeout(() => {
-        if (document.activeElement && document.activeElement.blur) {
-          document.activeElement.blur();
-        }
-      }, 0);
-    }
-  });
-}
 
     // 关闭 modal（按钮/遮罩）
     const modals = qsa(".modal");

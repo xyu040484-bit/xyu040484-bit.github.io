@@ -1,3 +1,6 @@
+a, button, [role="button"] {
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
+}
 /* ===== 手机点击蓝色高亮：A 方案（CSS） ===== */
 
 /* 1) 去掉移动端点按时的蓝色高亮 */
@@ -395,4 +398,9 @@ p{ margin: 10px 0 0; line-height: 1.75; }
   border-radius: 12px;
   display: block;
   margin-top: 12px;
+}
+/* ✅ 拖动滚动时临时禁用选中文字（解决手机上蓝色选中块） */
+body.no-select, body.no-select *{
+  -webkit-user-select: none !important;
+  user-select: none !important;
 }
