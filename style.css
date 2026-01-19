@@ -1,3 +1,42 @@
+/* ===== 手机点击蓝色高亮：A 方案（CSS） ===== */
+
+/* 1) 去掉移动端点按时的蓝色高亮 */
+* {
+  -webkit-tap-highlight-color: transparent; /* Android/部分浏览器 */
+}
+
+/* 2) 交互控件禁止“误选中”文字（只对按钮/导航等，不影响正文可复制） */
+button,
+a,
+.tile,
+.icon-btn,
+.mini-btn,
+.nav a,
+.avatar-wrap {
+  -webkit-touch-callout: none;   /* iOS 长按弹出复制菜单 */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 3) 让点击更像“按钮”而不是选中文本 */
+button,
+.tile,
+.icon-btn,
+.mini-btn {
+  touch-action: manipulation;
+}
+
+/* 4) 焦点样式：避免手机点一下出现“怪焦点框”，但保留键盘可访问性 */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid rgba(0,0,0,.35);
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+
 /* style.css（整段覆盖） */
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }

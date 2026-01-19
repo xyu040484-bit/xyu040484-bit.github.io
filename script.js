@@ -212,8 +212,38 @@
         const id = btn.getAttribute("data-modal");
         if (!id) return;
         openModal(qs("#" + id));
+        setupNoBlueSelectionOnTap();
       });
     });
+// ===== 手机点击蓝色选中：B 方案（JS）=====
+function setupNoBlueSelectionOnTap() {
+  const INTERACTIVE = "button, a, .tile, .icon-btn, .mini-btn, .nav a";
+
+  // 阻止交互元素触发“选中开始”
+  document.addEventListener("selectstart", (e) => {
+    if (e.target && e.target.closest && e.target.closest(INTERACTIVE)) {
+      e.preventDefault();
+    }
+  });
+
+  // 点/触摸交互元素后，清掉可能出现的选中高亮 + 取消焦点
+  const clearSel = () => {
+    const sel = window.getSelection && window.getSelection();
+    if (sel && sel.removeAllRanges) sel.removeAllRanges();
+  };
+
+  document.addEventListener("pointerup", (e) => {
+    if (e.target && e.target.closest && e.target.closest(INTERACTIVE)) {
+      clearSel();
+      // 取消焦点，避免某些浏览器给链接/按钮留一个“高亮状态”
+      setTimeout(() => {
+        if (document.activeElement && document.activeElement.blur) {
+          document.activeElement.blur();
+        }
+      }, 0);
+    }
+  });
+}
 
     // 关闭 modal（按钮/遮罩）
     const modals = qsa(".modal");
