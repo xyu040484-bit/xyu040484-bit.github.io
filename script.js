@@ -6,6 +6,42 @@
   function qsa(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
 
   // =========================
+  // 弹窗打开时：锁住一级页面(#snap)滚动，只允许弹窗内滚动
+  // =========================
+  let _unlockScroll = null;
+
+  function lockSnapScroll() {
+    const snap = qs("#snap");
+    if (!snap) return;
+
+    // 已经锁过就不重复锁
+    if (_unlockScroll) return;
+
+    // 1) 禁用 snap 自己的滚动
+    snap.dataset.prevOverflowY = snap.style.overflowY || "";
+    snap.style.overflowY = "hidden";
+
+    // 2) 防止 iOS/安卓“滚动穿透”：拦截 touchmove（但放行弹窗内）
+    const onTouchMove = (e) => {
+      const panel = e.target && e.target.closest && e.target.closest(".modal-panel");
+      if (!panel) e.preventDefault();
+    };
+
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+
+    _unlockScroll = () => {
+      snap.style.overflowY = snap.dataset.prevOverflowY || "";
+      delete snap.dataset.prevOverflowY;
+      document.removeEventListener("touchmove", onTouchMove);
+      _unlockScroll = null;
+    };
+  }
+
+  function unlockSnapScroll() {
+    if (_unlockScroll) _unlockScroll();
+  }
+
+  // =========================
   // A+B：手机点击蓝色高亮 / 蓝色选中块（JS 补丁）
   // =========================
   function setupNoBlueSelectionOnTap() {
@@ -18,19 +54,17 @@
       }
     });
 
-    // 点击/触摸交互元素后：清掉可能出现的选中高亮 + 取消焦点
     const clearSel = () => {
       const sel = window.getSelection && window.getSelection();
       if (sel && sel.removeAllRanges) sel.removeAllRanges();
     };
 
+    // 点击交互元素后：清掉可能出现的选中高亮 + 取消焦点
     document.addEventListener("pointerup", (e) => {
       const hit = e.target && e.target.closest && e.target.closest(INTERACTIVE);
       if (!hit) return;
 
       clearSel();
-
-      // 取消焦点，避免浏览器保留“高亮状态”
       setTimeout(() => {
         if (document.activeElement && document.activeElement.blur) {
           document.activeElement.blur();
@@ -38,15 +72,13 @@
       }, 0);
     });
 
-    // ✅ B：在可滚动区域拖动时，临时禁用选中（防止弹窗内容被选中出现蓝块）
+    // 拖动滚动时临时禁用选中（配合 CSS body.no-select）
     const isEditable = (el) =>
       el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
 
     document.addEventListener("touchstart", (e) => {
       const t = e.target;
       if (isEditable(t)) return;
-
-      // 只在这些区域触发：弹窗内容 / 中间笔谈滚动区
       if (t && t.closest && (t.closest(".modal-panel") || t.closest(".center-scroll"))) {
         document.body.classList.add("no-select");
       }
@@ -71,6 +103,9 @@
     modal.setAttribute("aria-hidden", "false");
     document.documentElement.style.overflow = "hidden";
 
+    // ✅ 关键：锁住一级页面滚动（解决“弹窗打开后背景还能滑”）
+    lockSnapScroll();
+
     // ✅ 打开“闲时笔谈”弹窗：把中间内容同步进去
     if (modal.id === "modal-notes") {
       const src = qs(".center-body");
@@ -93,18 +128,12 @@
   function closeModal(modal) {
     if (!modal) return;
 
-    // 如果你希望“放大弹窗里改了内容，关闭后同步回小窗”，可取消注释：
-    /*
-    if (modal.id === "modal-notes") {
-      const src = qs("#notes-modal-body");
-      const dst = qs(".center-body");
-      if (src && dst) dst.innerHTML = src.innerHTML;
-    }
-    */
-
     modal.classList.remove("open");
     modal.setAttribute("aria-hidden", "true");
     document.documentElement.style.overflow = "";
+
+    // ✅ 解锁一级页面滚动
+    unlockSnapScroll();
   }
 
   // =========================
@@ -114,7 +143,6 @@
     let current = getComputedStyle(document.documentElement)
       .getPropertyValue("--page-bg")
       .trim();
-
     let transitioning = false;
 
     function setVar(name, val) {
@@ -125,7 +153,6 @@
       if (!nextBg) return;
       if (nextBg === current) return;
 
-      // 过渡中：只更新目标
       if (transitioning) {
         setVar("--page-bg-next", nextBg);
         return;
@@ -158,33 +185,27 @@
     const snap = qs("#snap");
     if (!center || !snap) return;
 
-    center.addEventListener(
-      "wheel",
-      (e) => {
-        if (qs(".modal.open")) return;
+    center.addEventListener("wheel", (e) => {
+      if (qs(".modal.open")) return;
 
-        const dy = e.deltaY;
-        if (Math.abs(dy) < 1) return;
+      const dy = e.deltaY;
+      if (Math.abs(dy) < 1) return;
 
-        const atTop = center.scrollTop <= 0;
-        const atBottom = center.scrollTop + center.clientHeight >= center.scrollHeight - 1;
+      const atTop = center.scrollTop <= 0;
+      const atBottom = center.scrollTop + center.clientHeight >= center.scrollHeight - 1;
 
-        const scrollingDown = dy > 0;
-        const scrollingUp = dy < 0;
+      const scrollingDown = dy > 0;
+      const scrollingUp = dy < 0;
 
-        const canScrollDown = !atBottom;
-        const canScrollUp = !atTop;
+      const canScrollDown = !atBottom;
+      const canScrollUp = !atTop;
 
-        // 如果 center 还能滚，就截断事件，避免外层翻页
-        if ((scrollingDown && canScrollDown) || (scrollingUp && canScrollUp)) {
-          e.preventDefault();
-          e.stopPropagation();
-          center.scrollTop += dy;
-        }
-        // 到顶/到底：放行，继续滚会触发外层翻页
-      },
-      { passive: false }
-    );
+      if ((scrollingDown && canScrollDown) || (scrollingUp && canScrollUp)) {
+        e.preventDefault();
+        e.stopPropagation();
+        center.scrollTop += dy;
+      }
+    }, { passive: false });
   }
 
   // =========================
@@ -200,17 +221,13 @@
     const bg = createBgFader();
 
     function nearestIndex() {
-      const probeY = 140; // 判定“当前屏”的位置
-      let idx = 0,
-        best = Infinity;
+      const probeY = 140;
+      let idx = 0, best = Infinity;
 
       sections.forEach((sec, i) => {
         const r = sec.getBoundingClientRect();
         const d = Math.abs(r.top - probeY);
-        if (d < best) {
-          best = d;
-          idx = i;
-        }
+        if (d < best) { best = d; idx = i; }
       });
       return idx;
     }
@@ -222,22 +239,15 @@
       if (next) bg.fadeTo(next);
     }
 
-    // 初始化背景
     applyBgByIndex(nearestIndex());
 
-    // 滚动条/触控板拖动时也跟随切背景（rAF 降频）
     let raf = 0;
-    snap.addEventListener(
-      "scroll",
-      () => {
-        if (qs(".modal.open")) return;
-        if (raf) cancelAnimationFrame(raf);
-        raf = requestAnimationFrame(() => applyBgByIndex(nearestIndex()));
-      },
-      { passive: true }
-    );
+    snap.addEventListener("scroll", () => {
+      if (qs(".modal.open")) return;
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => applyBgByIndex(nearestIndex()));
+    }, { passive: true });
 
-    // 滚轮强制翻页（每次一屏）
     let locked = false;
     let lastTs = 0;
 
@@ -246,52 +256,37 @@
       const target = sections[idx];
       if (!target) return;
 
-      applyBgByIndex(idx); // 翻页前先切背景
+      applyBgByIndex(idx);
       target.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
-    snap.addEventListener(
-      "wheel",
-      (e) => {
-        // 如果滚轮发生在 center-scroll，会被 setupCenterWheelScroll 截断，不会到这里
-        if (qs(".modal.open")) return;
+    snap.addEventListener("wheel", (e) => {
+      if (qs(".modal.open")) return;
 
-        const now = Date.now();
-        if (locked) {
-          e.preventDefault();
-          return;
-        }
+      const now = Date.now();
+      if (locked) { e.preventDefault(); return; }
 
-        const dy = e.deltaY;
-        if (Math.abs(dy) < 12) return;
+      const dy = e.deltaY;
+      if (Math.abs(dy) < 12) return;
 
-        // 节流：防止连翻太快
-        if (now - lastTs < 650) {
-          e.preventDefault();
-          return;
-        }
-        lastTs = now;
+      if (now - lastTs < 650) { e.preventDefault(); return; }
+      lastTs = now;
 
-        locked = true;
-        e.preventDefault();
+      locked = true;
+      e.preventDefault();
 
-        const idx = nearestIndex();
-        const next = dy > 0 ? idx + 1 : idx - 1;
-        scrollToIndex(next);
+      const idx = nearestIndex();
+      const next = dy > 0 ? idx + 1 : idx - 1;
+      scrollToIndex(next);
 
-        setTimeout(() => {
-          locked = false;
-        }, 700);
-      },
-      { passive: false }
-    );
+      setTimeout(() => { locked = false; }, 700);
+    }, { passive: false });
   }
 
   // =========================
   // 启动
   // =========================
   document.addEventListener("DOMContentLoaded", () => {
-    // ✅ 先初始化：手机蓝色高亮/选中修复（只需一次）
     setupNoBlueSelectionOnTap();
 
     // 打开 modal（tile / mini-btn 都走 data-modal）
@@ -322,10 +317,7 @@
       if (opened) closeModal(opened);
     });
 
-    // 中间笔谈滚轮滚动
     setupCenterWheelScroll();
-
-    // 翻页 + 背景板变化
     setupWheelPaging();
   });
 })();

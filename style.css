@@ -134,6 +134,7 @@ body.bg-fading::after{
 .divider{ height: 1px; background: rgba(0,0,0,0.12); }
 
 /* 分屏吸附容器（强吸附） */
+/* 分屏吸附容器（强吸附） */
 .snap{
   height: 100vh;
   overflow-y: auto;
@@ -143,6 +144,11 @@ body.bg-fading::after{
   scroll-snap-stop: always;
   scroll-padding-top: var(--header-h);
 }
+
+/* 防止滚动链/回弹把背景带着动（手机体验更像App） */
+.snap { overscroll-behavior: none; }
+.modal-panel { overscroll-behavior: contain; }
+
 
 /* 每个板块：一屏 */
 .section{
