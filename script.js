@@ -1,4 +1,3 @@
-// script.js（整段覆盖，可直接复制）
 (function () {
   "use strict";
 
@@ -6,7 +5,7 @@
   function qsa(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
 
   // =========================
-  // 弹窗打开时：锁住一级页面(#snap)滚动，只允许弹窗内滚动
+  // 弹窗打开时：锁住一级页面(#snap)滚动，只允许弹窗内滚动（移动端稳版）
   // =========================
   let _unlockScroll = null;
 
@@ -17,22 +16,38 @@
     // 已经锁过就不重复锁
     if (_unlockScroll) return;
 
+    // 记住当前一级滚动位置（防止“弹窗打开后背景还会被带动”）
+    const snapTop = snap.scrollTop;
+
+    // 标记状态（方便你用 CSS 做额外加固）
+    document.body.classList.add("modal-open");
+
     // 1) 禁用 snap 自己的滚动
     snap.dataset.prevOverflowY = snap.style.overflowY || "";
     snap.style.overflowY = "hidden";
 
-    // 2) 防止 iOS/安卓“滚动穿透”：拦截 touchmove（但放行弹窗内）
-    const onTouchMove = (e) => {
-      const panel = e.target && e.target.closest && e.target.closest(".modal-panel");
-      if (!panel) e.preventDefault();
+    // 2) 某些手机仍可能“偷偷滚动”，这里强制拉回原位
+    const keepSnap = () => {
+      if (snap.scrollTop !== snapTop) snap.scrollTop = snapTop;
     };
+    snap.addEventListener("scroll", keepSnap, { passive: true });
 
+    // 3) 防止 iOS/安卓“滚动穿透”：拦截 touchmove（但放行弹窗内容）
+    const onTouchMove = (e) => {
+      const inPanel = e.target && e.target.closest && e.target.closest(".modal-panel");
+      if (!inPanel) e.preventDefault();
+    };
     document.addEventListener("touchmove", onTouchMove, { passive: false });
 
     _unlockScroll = () => {
+      // 恢复 snap 滚动
       snap.style.overflowY = snap.dataset.prevOverflowY || "";
       delete snap.dataset.prevOverflowY;
+
+      snap.removeEventListener("scroll", keepSnap);
       document.removeEventListener("touchmove", onTouchMove);
+
+      document.body.classList.remove("modal-open");
       _unlockScroll = null;
     };
   }
@@ -99,12 +114,11 @@
   function openModal(modal) {
     if (!modal) return;
 
+    // 先锁滚动，再显示弹窗（更稳）
+    lockSnapScroll();
+
     modal.classList.add("open");
     modal.setAttribute("aria-hidden", "false");
-    document.documentElement.style.overflow = "hidden";
-
-    // ✅ 关键：锁住一级页面滚动（解决“弹窗打开后背景还能滑”）
-    lockSnapScroll();
 
     // ✅ 打开“闲时笔谈”弹窗：把中间内容同步进去
     if (modal.id === "modal-notes") {
@@ -130,7 +144,6 @@
 
     modal.classList.remove("open");
     modal.setAttribute("aria-hidden", "true");
-    document.documentElement.style.overflow = "";
 
     // ✅ 解锁一级页面滚动
     unlockSnapScroll();
@@ -209,7 +222,7 @@
   }
 
   // =========================
-  // 强制翻页 + 背景联动
+  // 强制翻页 + 背景联动（电脑滚轮用）
   // =========================
   function setupWheelPaging() {
     const snap = qs("#snap");

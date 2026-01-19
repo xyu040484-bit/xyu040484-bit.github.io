@@ -1,12 +1,9 @@
-
 /* =========================
    Mobile tap highlight / selection fix（手机蓝条/蓝块）
    ========================= */
 
 /* 1) 关掉移动端点按高亮（很多安卓/部分浏览器的“蓝条”） */
-html, body {
-  -webkit-tap-highlight-color: transparent;
-}
+html, body { -webkit-tap-highlight-color: transparent; }
 
 /* 2) 交互控件：禁止长按菜单 + 禁止误选中文字（不影响正文可复制） */
 a, button, [role="button"],
@@ -58,8 +55,8 @@ html { scroll-behavior: smooth; }
   --shadow: 0 14px 36px rgba(0,0,0,0.12);
 
   /* 两层背景 cross-fade */
-  --page-bg: linear-gradient(135deg,#eef2ff,#e2e8ff);      /* 当前 */
-  --page-bg-next: linear-gradient(135deg,#eef2ff,#e2e8ff); /* 下一张 */
+  --page-bg: linear-gradient(135deg,#eef2ff,#e2e8ff);
+  --page-bg-next: linear-gradient(135deg,#eef2ff,#e2e8ff);
   --bg-fade-ms: 1100ms;
 }
 
@@ -91,9 +88,7 @@ body::after{
 }
 
 /* 触发淡入 */
-body.bg-fading::after{
-  opacity: 1;
-}
+body.bg-fading::after{ opacity: 1; }
 
 /* =========================
    Topbar
@@ -153,13 +148,26 @@ body.bg-fading::after{
   scroll-snap-stop: always;
   scroll-padding-top: var(--header-h);
 
-  /* 防止滚动链/回弹把背景带动（更像 App） */
+  /* 防止滚动链/回弹把背景带动 */
   overscroll-behavior: none;
 }
 
-/* JS 若给 #snap 加 locked，可直接锁滚动（可选） */
-.snap.locked{ overflow-y: hidden !important; }
+/* =========================
+   Modal 防穿透（手机二级界面空白处仍能滑一级的关键）
+   依赖 JS：打开弹窗时 body 会加上 modal-open
+   ========================= */
+body.modal-open #snap{
+  overflow: hidden !important;   /* 一级页面彻底不能滚 */
+}
+body.modal-open .modal-backdrop{
+  touch-action: none;            /* 遮罩上滑动不传递到底层 */
+}
+body.modal-open .modal-panel{
+  touch-action: pan-y;           /* 弹窗内容允许上下滚 */
+  -webkit-overflow-scrolling: touch;
+}
 
+/* 每个板块：一屏 */
 .section{
   scroll-snap-align: start;
   min-height: calc(100vh - var(--header-h));
@@ -265,8 +273,6 @@ p{ margin: 10px 0 0; line-height: 1.75; }
   min-height: 360px;
   max-height: 62vh;
   overflow: auto;
-
-  /* 防滚动链 */
   overscroll-behavior: contain;
 }
 
@@ -280,9 +286,7 @@ p{ margin: 10px 0 0; line-height: 1.75; }
   z-index: 1;
 }
 
-.center-body{
-  padding: 14px 14px 18px;
-}
+.center-body{ padding: 14px 14px 18px; }
 
 .center-body hr{
   border: none;
@@ -347,8 +351,6 @@ p{ margin: 10px 0 0; line-height: 1.75; }
   border-radius: 18px;
   border: 1px solid rgba(255,255,255,0.2);
   box-shadow: 0 18px 60px rgba(0,0,0,0.25);
-
-  /* 防滚动链 */
   overscroll-behavior: contain;
 }
 
@@ -363,9 +365,7 @@ p{ margin: 10px 0 0; line-height: 1.75; }
   padding: 14px 14px;
 }
 
-.modal-title{
-  font-weight: 900;
-}
+.modal-title{ font-weight: 900; }
 
 .icon-btn{
   width: 34px;
@@ -380,9 +380,7 @@ p{ margin: 10px 0 0; line-height: 1.75; }
 }
 .icon-btn:hover{ background: rgba(0,0,0,0.05); }
 
-.modal-body{
-  padding: 14px 16px 18px;
-}
+.modal-body{ padding: 14px 16px 18px; }
 
 /* =========================
    Contact
