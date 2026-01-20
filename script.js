@@ -1,56 +1,62 @@
-async function renderPhotoGallery() {
-  const host = document.querySelector("#photo-gallery");
-  if (!host) return;
-
-  host.innerHTML = '<p class="muted">正在加载照片…</p>';
-
-  try {
-    const res = await fetch("data/photos.json", { cache: "no-store" });
-    if (!res.ok) throw new Error("fetch photos.json failed: " + res.status);
-
-    const items = await res.json();
-    if (!Array.isArray(items) || items.length === 0) {
-      host.innerHTML = '<p class="muted">暂无照片。先往 /photos 放图片，再改 data/photos.json。</p>';
-      return;
-    }
-
-    host.innerHTML = items.map((it) => {
-      const title = it.title || "未命名";
-      const date = it.date || "";
-      const src = it.src || "";
-      const desc = it.desc || "";
-
-      return `
-        <div class="photo-card">
-          <img src="${src}" alt="${title}" loading="lazy" />
-          <div class="photo-meta">
-            <p class="photo-title">${title}</p>
-            ${date ? `<div class="photo-date">${date}</div>` : ""}
-            ${desc ? `<div class="photo-desc">${escapeHtml(desc)}</div>` : ""}
-          </div>
-        </div>
-      `;
-    }).join("");
-
-  } catch (err) {
-    console.error(err);
-    host.innerHTML = '<p class="muted">加载失败：检查 data/photos.json 是否存在、JSON 是否有效、图片路径是否正确。</p>';
-  }
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
+// script.js（整段覆盖，可直接复制）
 (function () {
   "use strict";
 
   function qs(sel, root) { return (root || document).querySelector(sel); }
   function qsa(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
+
+  // =========================
+  // Photo gallery
+  // =========================
+  function escapeHtml(s) {
+    return String(s)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
+  async function renderPhotoGallery() {
+    const host = qs("#photo-gallery");
+    if (!host) return;
+
+    host.innerHTML = '<p class="muted">正在加载照片…</p>';
+
+    try {
+      // ✅ 用 ./ 更稳（避免相对路径在某些场景被解析怪）
+      const res = await fetch("./data/photos.json", { cache: "no-store" });
+      if (!res.ok) throw new Error("fetch photos.json failed: " + res.status);
+
+      const items = await res.json();
+      if (!Array.isArray(items) || items.length === 0) {
+        host.innerHTML = '<p class="muted">暂无照片。先往 /photos 放图片，再改 data/photos.json。</p>';
+        return;
+      }
+
+      host.innerHTML = items.map((it) => {
+        const title = it.title || "未命名";
+        const date = it.date || "";
+        const src = it.src || "";
+        const desc = it.desc || "";
+
+        return `
+          <div class="photo-card">
+            <img src="${src}" alt="${escapeHtml(title)}" loading="lazy" />
+            <div class="photo-meta">
+              <p class="photo-title">${escapeHtml(title)}</p>
+              ${date ? `<div class="photo-date">${escapeHtml(date)}</div>` : ""}
+              ${desc ? `<div class="photo-desc">${escapeHtml(desc)}</div>` : ""}
+            </div>
+          </div>
+        `;
+      }).join("");
+
+    } catch (err) {
+      console.error(err);
+      host.innerHTML = '<p class="muted">加载失败：检查 data/photos.json 是否存在、JSON 是否有效、图片路径是否正确。</p>';
+    }
+  }
 
   // =========================
   // 弹窗打开时：锁住一级页面(#snap)滚动，只允许弹窗内滚动（移动端稳版）
@@ -60,42 +66,88 @@ function escapeHtml(s) {
   function lockSnapScroll() {
     const snap = qs("#snap");
     if (!snap) return;
-
-    // 已经锁过就不重复锁
     if (_unlockScroll) return;
 
-    // 记住当前一级滚动位置（防止“弹窗打开后背景还会被带动”）
     const snapTop = snap.scrollTop;
 
-    // 标记状态（方便你用 CSS 做额外加固）
+    // ✅ 关键：让 CSS 的 body.modal-open 生效（防穿透规则靠它）
     document.body.classList.add("modal-open");
 
-    // 1) 禁用 snap 自己的滚动
+    // 1) 锁 snap 自己
     snap.dataset.prevOverflowY = snap.style.overflowY || "";
     snap.style.overflowY = "hidden";
 
-    // 2) 某些手机仍可能“偷偷滚动”，这里强制拉回原位
+    // 2) 同时锁 html/body（防止 iOS “滚动链/回弹”）
+    const html = document.documentElement;
+    const body = document.body;
+    html.dataset.prevOverflow = html.style.overflow || "";
+    body.dataset.prevOverflow = body.style.overflow || "";
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+
+    // 3) 强制保持 snap 的 scrollTop（有些机型仍会被带动）
     const keepSnap = () => {
       if (snap.scrollTop !== snapTop) snap.scrollTop = snapTop;
     };
     snap.addEventListener("scroll", keepSnap, { passive: true });
 
-    // 3) 防止 iOS/安卓“滚动穿透”：拦截 touchmove（但放行弹窗内容）
-    const onTouchMove = (e) => {
-      const inPanel = e.target && e.target.closest && e.target.closest(".modal-panel");
-      if (!inPanel) e.preventDefault();
+    // 4) 防“滚动穿透”：遮罩/空白区域一律阻止；
+    //    在 panel 内：到顶还下拉 / 到底还上推 => 阻止（防把背景带动）
+    let startY = 0;
+
+    const onTouchStart = (e) => {
+      const panel = e.target && e.target.closest && e.target.closest(".modal-panel");
+      if (!panel) return;
+      startY = e.touches ? e.touches[0].clientY : 0;
     };
+
+    const onTouchMove = (e) => {
+      const panel = e.target && e.target.closest && e.target.closest(".modal-panel");
+
+      // 不在弹窗内容里：一律阻止（遮罩/空白区域）
+      if (!panel) {
+        e.preventDefault();
+        return;
+      }
+
+      const curY = e.touches ? e.touches[0].clientY : startY;
+      const dy = curY - startY; // dy > 0 下拉，dy < 0 上推
+
+      const canScroll = panel.scrollHeight > panel.clientHeight + 1;
+      if (!canScroll) {
+        e.preventDefault();
+        return;
+      }
+
+      const atTop = panel.scrollTop <= 0;
+      const atBottom = panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 1;
+
+      if ((atTop && dy > 0) || (atBottom && dy < 0)) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
     document.addEventListener("touchmove", onTouchMove, { passive: false });
 
     _unlockScroll = () => {
-      // 恢复 snap 滚动
+      // 恢复 snap
       snap.style.overflowY = snap.dataset.prevOverflowY || "";
       delete snap.dataset.prevOverflowY;
-
       snap.removeEventListener("scroll", keepSnap);
+
+      // 恢复 html/body
+      html.style.overflow = html.dataset.prevOverflow || "";
+      body.style.overflow = body.dataset.prevOverflow || "";
+      delete html.dataset.prevOverflow;
+      delete body.dataset.prevOverflow;
+
+      document.removeEventListener("touchstart", onTouchStart);
       document.removeEventListener("touchmove", onTouchMove);
 
+      // ✅ 关键：关闭时去掉 modal-open
       document.body.classList.remove("modal-open");
+
       _unlockScroll = null;
     };
   }
@@ -105,12 +157,11 @@ function escapeHtml(s) {
   }
 
   // =========================
-  // A+B：手机点击蓝色高亮 / 蓝色选中块（JS 补丁）
+  // 手机点击蓝色高亮 / 蓝色选中块（JS 补丁）
   // =========================
   function setupNoBlueSelectionOnTap() {
     const INTERACTIVE = "button, a, .tile, .icon-btn, .mini-btn, .nav a";
 
-    // 阻止交互元素触发“选中开始”
     document.addEventListener("selectstart", (e) => {
       if (e.target && e.target.closest && e.target.closest(INTERACTIVE)) {
         e.preventDefault();
@@ -122,11 +173,9 @@ function escapeHtml(s) {
       if (sel && sel.removeAllRanges) sel.removeAllRanges();
     };
 
-    // 点击交互元素后：清掉可能出现的选中高亮 + 取消焦点
     document.addEventListener("pointerup", (e) => {
       const hit = e.target && e.target.closest && e.target.closest(INTERACTIVE);
       if (!hit) return;
-
       clearSel();
       setTimeout(() => {
         if (document.activeElement && document.activeElement.blur) {
@@ -135,7 +184,6 @@ function escapeHtml(s) {
       }, 0);
     });
 
-    // 拖动滚动时临时禁用选中（配合 CSS body.no-select）
     const isEditable = (el) =>
       el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
 
@@ -162,30 +210,23 @@ function escapeHtml(s) {
   function openModal(modal) {
     if (!modal) return;
 
-    // 先锁滚动，再显示弹窗（更稳）
+    // 先锁滚动再显示（更稳）
     lockSnapScroll();
 
     modal.classList.add("open");
-    if (modal.id === "modal-photo") {
-  renderPhotoGallery();
-}
-
     modal.setAttribute("aria-hidden", "false");
 
-    // ✅ 打开“闲时笔谈”弹窗：把中间内容同步进去
+    // 摄影：打开时加载相册
+    if (modal.id === "modal-photo") {
+      renderPhotoGallery();
+    }
+
+    // 笔谈：同步内容
     if (modal.id === "modal-notes") {
       const src = qs(".center-body");
       const dst = qs("#notes-modal-body");
-
-      if (!src) {
-        console.warn("[notes sync] 没找到 .center-body（检查 index.html 结构：笔谈内容必须在 .center-body 里）");
-        return;
-      }
-      if (!dst) {
-        console.warn("[notes sync] 没找到 #notes-modal-body（检查 modal-notes 是否存在且闭合）");
-        return;
-      }
-
+      if (!src) return console.warn("[notes sync] 没找到 .center-body");
+      if (!dst) return console.warn("[notes sync] 没找到 #notes-modal-body");
       dst.innerHTML = src.innerHTML;
       dst.scrollTop = 0;
     }
@@ -193,11 +234,8 @@ function escapeHtml(s) {
 
   function closeModal(modal) {
     if (!modal) return;
-
     modal.classList.remove("open");
     modal.setAttribute("aria-hidden", "true");
-
-    // ✅ 解锁一级页面滚动
     unlockSnapScroll();
   }
 
@@ -243,7 +281,7 @@ function escapeHtml(s) {
   }
 
   // =========================
-  // 中间笔谈：鼠标在其上滚轮滚内容（不触发翻页）
+  // 中间笔谈：鼠标滚轮滚内容（不触发翻页）
   // =========================
   function setupCenterWheelScroll() {
     const center = qs(".center-scroll");
@@ -354,9 +392,8 @@ function escapeHtml(s) {
   document.addEventListener("DOMContentLoaded", () => {
     setupNoBlueSelectionOnTap();
 
-    // 打开 modal（tile / mini-btn 都走 data-modal）
-    const openers = qsa("[data-modal]");
-    openers.forEach((btn) => {
+    // 打开 modal
+    qsa("[data-modal]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.getAttribute("data-modal");
         if (!id) return;
@@ -365,12 +402,10 @@ function escapeHtml(s) {
     });
 
     // 关闭 modal（按钮/遮罩）
-    const modals = qsa(".modal");
-    modals.forEach((m) => {
+    qsa(".modal").forEach((m) => {
       qsa("[data-close]", m).forEach((c) => {
         c.addEventListener("click", () => closeModal(m));
       });
-
       const backdrop = qs(".modal-backdrop", m);
       if (backdrop) backdrop.addEventListener("click", () => closeModal(m));
     });
