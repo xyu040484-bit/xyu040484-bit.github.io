@@ -1,5 +1,3 @@
-
- // script.js（整段覆盖，可直接复制）
 (function () {
   "use strict";
 
@@ -19,6 +17,40 @@
   }
 
   // =========================
+  // Photo data cache（解决：每次打开都卡一下）
+  // =========================
+  let _photosCache = null;
+  let _photosPromise = null;
+
+  async function loadPhotosOnce() {
+    if (_photosCache) return _photosCache;
+    if (_photosPromise) return _photosPromise;
+
+    // ✅ 不要 no-store：让浏览器走正常缓存
+    _photosPromise = fetch("data/photos.json")
+      .then((res) => {
+        if (!res.ok) throw new Error("fetch photos.json failed: " + res.status);
+        return res.json();
+      })
+      .then((json) => {
+        _photosCache = json;
+        return json;
+      })
+      .finally(() => {
+        _photosPromise = null;
+      });
+
+    return _photosPromise;
+  }
+
+  // 可选：页面空闲时预取 JSON（不影响首屏）
+  function prefetchPhotosJson() {
+    const run = () => { loadPhotosOnce().catch(() => {}); };
+    if ("requestIdleCallback" in window) window.requestIdleCallback(run, { timeout: 1200 });
+    else setTimeout(run, 500);
+  }
+
+  // =========================
   // Photo gallery: blur-up + lightbox
   // =========================
   function loadHiResInto(imgEl) {
@@ -27,13 +59,19 @@
     const full = imgEl.dataset.full;
     if (!full) return;
 
+    // 让浏览器异步解码（减少“看着卡”的感觉）
+    try { imgEl.decoding = "async"; } catch (_) {}
+
     const hi = new Image();
     hi.src = full;
 
     hi.onload = () => {
+      // 先替换 src，再等一帧加 is-loaded，动画更稳
       imgEl.src = full;
-      imgEl.classList.add("is-loaded");
-      imgEl.dataset.loaded = "1";
+      requestAnimationFrame(() => {
+        imgEl.classList.add("is-loaded");
+        imgEl.dataset.loaded = "1";
+      });
     };
 
     hi.onerror = () => {
@@ -45,7 +83,7 @@
   function setupLazyHiRes(root) {
     const imgs = Array.from((root || document).querySelectorAll("img[data-full]"));
 
-    // 没有 IntersectionObserver 就直接加载
+    // 没有 IntersectionObserver 就直接加载（兼容）
     if (!("IntersectionObserver" in window)) {
       imgs.forEach(loadHiResInto);
       return;
@@ -67,7 +105,6 @@
     const title = qs("#photo-view-title");
     const date = qs("#photo-view-date");
     const desc = qs("#photo-view-desc");
-
     if (!img || !title || !date || !desc) return;
 
     const t = item.title || "未命名";
@@ -76,18 +113,18 @@
     const full = item.src || "";
     const ds = item.desc || "";
 
-    // 先上缩略图（模糊）
     img.classList.remove("is-loaded");
     img.dataset.loaded = "0";
     img.src = thumb;
     img.dataset.full = full;
     img.alt = t;
+    try { img.decoding = "async"; } catch (_) {}
 
     title.textContent = t;
     date.textContent = d;
     desc.textContent = ds;
 
-    // 预览里直接加载高清（更跟手）
+    // 放大预览里：直接加载高清（更爽）
     loadHiResInto(img);
   }
 
@@ -98,15 +135,14 @@
     host.innerHTML = '<p class="muted">正在加载照片…</p>';
 
     try {
-      const res = await fetch("data/photos.json", { cache: "no-store" });
-      if (!res.ok) throw new Error("fetch photos.json failed: " + res.status);
+      const items = await loadPhotosOnce();
 
-      const items = await res.json();
       if (!Array.isArray(items) || items.length === 0) {
         host.innerHTML = '<p class="muted">暂无照片。先往 /photos 放图片，再改 data/photos.json。</p>';
         return;
       }
 
+      // ✅ 一次性生成 HTML（简单且快），再用懒加载高清
       host.innerHTML = items.map((it, idx) => {
         const title = it.title || "未命名";
         const date = it.date || "";
@@ -114,7 +150,6 @@
         const full = it.src || "";
         const desc = it.desc || "";
 
-        // 缩略图先显示（模糊），高清放 data-full，进入视口再加载替换
         return `
           <div class="photo-card" data-idx="${idx}">
             <div class="photo-media">
@@ -123,7 +158,10 @@
                    data-full="${escapeHtml(full)}"
                    data-loaded="0"
                    alt="${escapeHtml(title)}"
-                   loading="lazy" />
+                   loading="lazy"
+                   decoding="async"
+                   width="900"
+                   height="900" />
             </div>
             <div class="photo-meta">
               <p class="photo-title">${escapeHtml(title)}</p>
@@ -134,10 +172,10 @@
         `;
       }).join("");
 
-      // 列表：懒加载高清 + 渐清晰
+      // 列表：进入视口才换高清 + 渐清晰
       setupLazyHiRes(host);
 
-      // 点击卡片：打开预览弹窗（先填数据再打开）
+      // 点击卡片：放大预览（先填数据再打开）
       host.querySelectorAll(".photo-card").forEach((card) => {
         card.addEventListener("click", () => {
           const idx = Number(card.dataset.idx || "0");
@@ -165,17 +203,16 @@
     if (!snap) return;
     if (_unlockScroll) return;
 
-    // 记住一级滚动位置
     const snapTop = snap.scrollTop;
 
-    // 给 CSS 一个状态（你 CSS 里用 body.modal-open 来加固）
+    // 给 CSS 一个状态（你 CSS 里用 body.modal-open）
     document.body.classList.add("modal-open");
 
     // 1) 锁 snap 自己
     snap.dataset.prevOverflowY = snap.style.overflowY || "";
     snap.style.overflowY = "hidden";
 
-    // 2) 同时锁 html/body（防 iOS 滚动链 / 回弹）
+    // 2) 同时锁 html/body（防 iOS 滚动链/回弹）
     const html = document.documentElement;
     const body = document.body;
     html.dataset.prevOverflow = html.style.overflow || "";
@@ -183,13 +220,13 @@
     html.style.overflow = "hidden";
     body.style.overflow = "hidden";
 
-    // 3) 有些机型仍会“带动背景”，强制拉回 snapTop
+    // 3) 强制保持 snap 的 scrollTop（极少数机型会被带动）
     const keepSnap = () => {
       if (snap.scrollTop !== snapTop) snap.scrollTop = snapTop;
     };
     snap.addEventListener("scroll", keepSnap, { passive: true });
 
-    // 4) 关键：处理“弹窗里空白处滑动”导致背景滚动（穿透）
+    // 4) 关键：解决“弹窗空白处滑动带动背景”
     let startY = 0;
 
     const onTouchStart = (e) => {
@@ -201,19 +238,17 @@
     const onTouchMove = (e) => {
       const panel = e.target && e.target.closest && e.target.closest(".modal-panel");
 
-      // 不在弹窗内容里（遮罩/空白）：一律阻止
+      // 不在 panel 内（遮罩/空白）：一律阻止
       if (!panel) {
         e.preventDefault();
         return;
       }
 
-      // 在 panel 里：判断是否要阻断“到顶/到底继续拉”的穿透
       const curY = e.touches ? e.touches[0].clientY : startY;
       const dy = curY - startY; // dy>0 下拉，dy<0 上推
 
       const canScroll = panel.scrollHeight > panel.clientHeight + 1;
       if (!canScroll) {
-        // panel 本身不够高，根本不能滚：阻止默认，避免带动背景
         e.preventDefault();
         return;
       }
@@ -221,7 +256,6 @@
       const atTop = panel.scrollTop <= 0;
       const atBottom = panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 1;
 
-      // 顶部继续下拉 / 底部继续上推：阻止默认（避免把背景带动）
       if ((atTop && dy > 0) || (atBottom && dy < 0)) {
         e.preventDefault();
       }
@@ -231,12 +265,10 @@
     document.addEventListener("touchmove", onTouchMove, { passive: false });
 
     _unlockScroll = () => {
-      // 恢复 snap
       snap.style.overflowY = snap.dataset.prevOverflowY || "";
       delete snap.dataset.prevOverflowY;
       snap.removeEventListener("scroll", keepSnap);
 
-      // 恢复 html/body
       html.style.overflow = html.dataset.prevOverflow || "";
       body.style.overflow = body.dataset.prevOverflow || "";
       delete html.dataset.prevOverflow;
@@ -308,18 +340,17 @@
   function openModal(modal) {
     if (!modal) return;
 
-    // 先锁滚动再显示（更稳）
     lockSnapScroll();
 
     modal.classList.add("open");
     modal.setAttribute("aria-hidden", "false");
 
-    // 摄影：打开时加载相册
+    // 摄影：打开时渲染画廊（不会重复下载 JSON，因为有缓存）
     if (modal.id === "modal-photo") {
       renderPhotoGallery();
     }
 
-    // 笔谈：同步内容
+    // 闲时笔谈：同步内容
     if (modal.id === "modal-notes") {
       const src = qs(".center-body");
       const dst = qs("#notes-modal-body");
@@ -332,10 +363,11 @@
 
   function closeModal(modal) {
     if (!modal) return;
+
     modal.classList.remove("open");
     modal.setAttribute("aria-hidden", "true");
 
-    // 如果还有其他 modal 仍然开着，就别解锁（防止多弹窗情况下出问题）
+    // 还有其他 modal 开着就别解锁
     if (!qs(".modal.open")) {
       unlockSnapScroll();
     }
@@ -493,6 +525,9 @@
   // =========================
   document.addEventListener("DOMContentLoaded", () => {
     setupNoBlueSelectionOnTap();
+
+    // 预取 photos.json（提升第一次打开摄影弹窗速度）
+    prefetchPhotosJson();
 
     // 打开 modal
     qsa("[data-modal]").forEach((btn) => {
