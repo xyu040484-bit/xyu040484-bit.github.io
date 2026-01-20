@@ -437,3 +437,55 @@ p{ margin: 10px 0 0; line-height: 1.75; }
   html { scroll-behavior: auto; }
   body::after{ transition: none; }
 }
+/* 摄影画廊 */
+.gallery{
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.photo-card{
+  border: 1px solid rgba(0,0,0,0.10);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.08);
+}
+
+.photo-card img{
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+  display: block;
+}
+
+.photo-meta{
+  padding: 12px 12px 14px;
+}
+
+.photo-title{
+  font-weight: 900;
+  margin: 0;
+  font-size: 14px;
+}
+
+.photo-date{
+  margin-top: 6px;
+  font-size: 12px;
+  color: #666;
+}
+
+.photo-desc{
+  margin-top: 10px;
+  font-size: 13px;
+  color: #222;
+  line-height: 1.7;
+  white-space: pre-wrap; /* 支持换行 */
+}
+
+/* 手机端 */
+@media (max-width: 720px){
+  .gallery{ grid-template-columns: 1fr; }
+  .photo-card img{ height: 240px; }
+}

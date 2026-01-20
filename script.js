@@ -1,3 +1,51 @@
+async function renderPhotoGallery() {
+  const host = document.querySelector("#photo-gallery");
+  if (!host) return;
+
+  host.innerHTML = '<p class="muted">正在加载照片…</p>';
+
+  try {
+    const res = await fetch("data/photos.json", { cache: "no-store" });
+    if (!res.ok) throw new Error("fetch photos.json failed: " + res.status);
+
+    const items = await res.json();
+    if (!Array.isArray(items) || items.length === 0) {
+      host.innerHTML = '<p class="muted">暂无照片。先往 /photos 放图片，再改 data/photos.json。</p>';
+      return;
+    }
+
+    host.innerHTML = items.map((it) => {
+      const title = it.title || "未命名";
+      const date = it.date || "";
+      const src = it.src || "";
+      const desc = it.desc || "";
+
+      return `
+        <div class="photo-card">
+          <img src="${src}" alt="${title}" loading="lazy" />
+          <div class="photo-meta">
+            <p class="photo-title">${title}</p>
+            ${date ? `<div class="photo-date">${date}</div>` : ""}
+            ${desc ? `<div class="photo-desc">${escapeHtml(desc)}</div>` : ""}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+  } catch (err) {
+    console.error(err);
+    host.innerHTML = '<p class="muted">加载失败：检查 data/photos.json 是否存在、JSON 是否有效、图片路径是否正确。</p>';
+  }
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
 (function () {
   "use strict";
 
@@ -118,6 +166,10 @@
     lockSnapScroll();
 
     modal.classList.add("open");
+    if (modal.id === "modal-photo") {
+  renderPhotoGallery();
+}
+
     modal.setAttribute("aria-hidden", "false");
 
     // ✅ 打开“闲时笔谈”弹窗：把中间内容同步进去
