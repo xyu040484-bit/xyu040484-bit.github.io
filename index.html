@@ -90,7 +90,7 @@
               <!-- ✅ 注意：所有内容都必须放在 center-body 里 -->
               <div class="center-body">
                 <p><a href="notes/2026.1.18闲时笔谈1.html">2026-01-18｜2026.1.18闲时笔谈1</a></p>
-                <p>……</p>
+                <p><a href="notes/2026.1.20闲时笔谈2.html">2026-01-20｜2026.1.18闲时笔谈2</a></p>
                 <p>……</p>
                 <p>……</p>
                 <p>……</p>
@@ -173,6 +173,24 @@
       <div class="modal-body" id="notes-modal-body"></div>
     </div>
   </div>
+<!-- 图片放大预览弹窗（Lightbox） -->
+<div class="modal" id="modal-photo-view" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel lightbox" role="dialog" aria-modal="true" aria-label="查看照片">
+    <div class="modal-head">
+      <div class="modal-title">查看照片</div>
+      <button class="icon-btn" type="button" data-close aria-label="关闭">×</button>
+    </div>
+    <div class="modal-body">
+      <img id="photo-view-img" class="lightbox-img" alt="photo" />
+      <div class="lightbox-meta">
+        <p id="photo-view-title" class="lightbox-title"></p>
+        <div id="photo-view-date" class="lightbox-date"></div>
+        <div id="photo-view-desc" class="lightbox-desc"></div>
+      </div>
+    </div>
+  </div>
+</div>
 
   <script src="script.js"></script>
 </body>
