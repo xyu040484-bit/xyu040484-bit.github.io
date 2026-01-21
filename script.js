@@ -5,7 +5,282 @@
   function qsa(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
 
   // =========================
-  // Utils
+  // Seasons config（春夏秋冬：顶部渐变 + 特效颜色）
+  // =========================
+  const SEASONS = {
+    spring: { topA: "#22c55e", topB: "#fb7185", fx: ["#fb7185", "#fda4af", "#86efac", "#22c55e"], mode: "petal" },
+    summer: { topA: "#06b6d4", topB: "#3b82f6", fx: ["#22d3ee", "#60a5fa", "#a7f3d0", "#38bdf8"], mode: "glow" },
+    autumn: { topA: "#f59e0b", topB: "#b45309", fx: ["#fb923c", "#f59e0b", "#b45309", "#fde68a"], mode: "leaf" },
+    winter: { topA: "#60a5fa", topB: "#a5b4fc", fx: ["#ffffff", "#e5e7eb", "#bfdbfe", "#93c5fd"], mode: "snow" },
+  };
+
+  function seasonBySectionId(id) {
+    if (id === "home") return "spring";
+    if (id === "hobby") return "summer";
+    if (id === "notes") return "autumn";
+    if (id === "contact") return "winter";
+    return "spring";
+  }
+
+  function setTopGradient(seasonKey) {
+    const s = SEASONS[seasonKey] || SEASONS.spring;
+    const r = document.documentElement.style;
+    r.setProperty("--top-a", s.topA);
+    r.setProperty("--top-b", s.topB);
+  }
+
+  // =========================
+  // Background Cross-fade（你原来的）
+  // =========================
+  function createBgFader() {
+    let current = getComputedStyle(document.documentElement)
+      .getPropertyValue("--page-bg")
+      .trim();
+    let transitioning = false;
+
+    function setVar(name, val) {
+      document.documentElement.style.setProperty(name, val);
+    }
+
+    function fadeTo(nextBg) {
+      if (!nextBg) return;
+      if (nextBg === current) return;
+
+      if (transitioning) {
+        setVar("--page-bg-next", nextBg);
+        return;
+      }
+
+      transitioning = true;
+      setVar("--page-bg-next", nextBg);
+      document.body.classList.add("bg-fading");
+
+      const ms =
+        parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--bg-fade-ms")) ||
+        900;
+
+      setTimeout(() => {
+        current = nextBg;
+        setVar("--page-bg", current);
+        document.body.classList.remove("bg-fading");
+        transitioning = false;
+      }, ms + 60);
+    }
+
+    return { fadeTo };
+  }
+
+  // =========================
+  // Home hero：只重播动画，不换色（符合你要求：中间“你好，我是xianyu”颜色不变）
+  // =========================
+  function playHeroAnim() {
+    document.body.classList.remove("hero-anim");
+    void document.body.offsetWidth; // reflow
+    document.body.classList.add("hero-anim");
+    window.setTimeout(() => document.body.classList.remove("hero-anim"), 1600);
+  }
+
+  function setupHeroReplayOnEnter() {
+    const home = qs("#home");
+    const h1 = qs("#home .hero-title");
+    if (!home || !h1) return;
+
+    setTimeout(() => playHeroAnim(), 250);
+
+    const io = new IntersectionObserver((entries) => {
+      for (const ent of entries) {
+        if (ent.isIntersecting && ent.intersectionRatio >= 0.6) {
+          playHeroAnim();
+        }
+      }
+    }, { threshold: [0.6] });
+
+    io.observe(home);
+  }
+
+  // =========================
+  // Season FX (canvas) — 自动创建，不用改 HTML
+  // =========================
+  function setupSeasonFx() {
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) return { setSeason: () => {}, pause: () => {}, resume: () => {} };
+
+    let canvas = qs("#seasonFx");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.id = "seasonFx";
+      canvas.setAttribute("aria-hidden", "true");
+      document.body.prepend(canvas);
+    }
+
+    const ctx = canvas.getContext("2d");
+    let W = 0, H = 0, DPR = 1;
+
+    let seasonKey = "spring";
+    let mode = SEASONS.spring.mode;
+    let colors = SEASONS.spring.fx;
+
+    const isMobile = matchMedia("(max-width: 820px)").matches;
+    const MAX = isMobile ? 70 : 130;
+
+    function resize() {
+      DPR = Math.min(2, window.devicePixelRatio || 1);
+      W = Math.floor(window.innerWidth);
+      H = Math.floor(window.innerHeight);
+      canvas.width = Math.floor(W * DPR);
+      canvas.height = Math.floor(H * DPR);
+      canvas.style.width = W + "px";
+      canvas.style.height = H + "px";
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    }
+    window.addEventListener("resize", resize, { passive: true });
+    resize();
+
+    function rand(a, b) { return a + Math.random() * (b - a); }
+    function pick(arr) { return arr[(Math.random() * arr.length) | 0]; }
+
+    class Particle {
+      constructor() { this.reset(true); }
+      reset(first = false) {
+        this.x = rand(0, W);
+        this.y = first ? rand(0, H) : -rand(20, 200);
+        this.vx = rand(-0.6, 0.8);
+        this.vy = rand(0.6, 1.8);
+        this.size = rand(2, 7);
+        this.rot = rand(0, Math.PI * 2);
+        this.vr = rand(-0.03, 0.03);
+        this.alpha = rand(0.25, 0.75);
+        this.color = pick(colors);
+        // mode-specific tuning
+        if (mode === "snow") {
+          this.size = rand(1.5, 4.2);
+          this.vy = rand(0.7, 1.9);
+          this.vx = rand(-0.35, 0.35);
+          this.alpha = rand(0.35, 0.9);
+          this.color = pick(colors);
+        }
+        if (mode === "glow") {
+          this.size = rand(6, 18);
+          this.vy = rand(-0.25, 0.35);
+          this.vx = rand(-0.35, 0.35);
+          this.alpha = rand(0.08, 0.22);
+          this.y = first ? rand(0, H) : rand(H + 40, H + 200);
+        }
+        if (mode === "leaf") {
+          this.size = rand(6, 14);
+          this.vy = rand(0.8, 2.1);
+          this.vx = rand(-1.0, 1.0);
+          this.alpha = rand(0.25, 0.65);
+        }
+        if (mode === "petal") {
+          this.size = rand(4, 10);
+          this.vy = rand(0.7, 1.8);
+          this.vx = rand(-0.9, 0.9);
+          this.alpha = rand(0.18, 0.55);
+        }
+      }
+      step() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.rot += this.vr;
+
+        // gentle sway
+        if (mode === "snow") this.x += Math.sin(this.y * 0.01) * 0.25;
+        if (mode === "petal") this.x += Math.sin(this.y * 0.012) * 0.5;
+        if (mode === "leaf") this.x += Math.sin(this.y * 0.01) * 0.8;
+
+        // wrap / reset
+        if (mode === "glow") {
+          if (this.y < -60 || this.x < -80 || this.x > W + 80) this.reset(false);
+        } else {
+          if (this.y > H + 80 || this.x < -80 || this.x > W + 80) this.reset(false);
+        }
+      }
+      draw() {
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rot);
+
+        if (mode === "snow") {
+          ctx.fillStyle = this.color;
+          ctx.beginPath();
+          ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (mode === "glow") {
+          const g = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size);
+          g.addColorStop(0, this.color);
+          g.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (mode === "leaf") {
+          ctx.fillStyle = this.color;
+          ctx.beginPath();
+          ctx.moveTo(0, -this.size);
+          ctx.quadraticCurveTo(this.size * 0.9, -this.size * 0.2, this.size * 0.4, this.size);
+          ctx.quadraticCurveTo(0, this.size * 0.6, -this.size * 0.4, this.size);
+          ctx.quadraticCurveTo(-this.size * 0.9, -this.size * 0.2, 0, -this.size);
+          ctx.fill();
+        } else { // petal
+          ctx.fillStyle = this.color;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, this.size * 0.75, this.size, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+    }
+
+    let particles = Array.from({ length: MAX }, () => new Particle());
+    let raf = 0;
+    let paused = false;
+
+    function tick() {
+      raf = requestAnimationFrame(tick);
+      if (paused) return;
+
+      ctx.clearRect(0, 0, W, H);
+
+      // subtle overall fade for glow mode
+      if (mode === "glow") {
+        ctx.save();
+        ctx.globalAlpha = 0.08;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, W, H);
+        ctx.restore();
+      }
+
+      for (const p of particles) {
+        p.step();
+        p.draw();
+      }
+    }
+
+    function setSeason(nextKey) {
+      if (!SEASONS[nextKey]) nextKey = "spring";
+      if (nextKey === seasonKey) return;
+
+      seasonKey = nextKey;
+      mode = SEASONS[nextKey].mode;
+      colors = SEASONS[nextKey].fx;
+
+      // 重置粒子，让切换更“像换季”
+      particles = Array.from({ length: MAX }, () => new Particle());
+    }
+
+    function pause() { paused = true; }
+    function resume() { paused = false; }
+
+    tick();
+
+    return { setSeason, pause, resume };
+  }
+
+  // =========================
+  // Photo gallery + blur-up + Lightbox
   // =========================
   function escapeHtml(s) {
     return String(s)
@@ -16,116 +291,9 @@
       .replaceAll("'", "&#39;");
   }
 
-  // =========================
-  // Photo data cache（解决：每次打开都卡一下）
-  // =========================
-  let _photosCache = null;
-  let _photosPromise = null;
-
-  async function loadPhotosOnce() {
-    if (_photosCache) return _photosCache;
-    if (_photosPromise) return _photosPromise;
-
-    // ✅ 不要 no-store：让浏览器走正常缓存
-    _photosPromise = fetch("data/photos.json")
-      .then((res) => {
-        if (!res.ok) throw new Error("fetch photos.json failed: " + res.status);
-        return res.json();
-      })
-      .then((json) => {
-        _photosCache = json;
-        return json;
-      })
-      .finally(() => {
-        _photosPromise = null;
-      });
-
-    return _photosPromise;
-  }
-
-  // 可选：页面空闲时预取 JSON（不影响首屏）
-  function prefetchPhotosJson() {
-    const run = () => { loadPhotosOnce().catch(() => {}); };
-    if ("requestIdleCallback" in window) window.requestIdleCallback(run, { timeout: 1200 });
-    else setTimeout(run, 500);
-  }
-
-  // =========================
-  // Photo gallery: blur-up + lightbox
-  // =========================
-  function loadHiResInto(imgEl) {
-    if (!imgEl || imgEl.dataset.loaded === "1") return;
-
-    const full = imgEl.dataset.full;
-    if (!full) return;
-
-    // 让浏览器异步解码（减少“看着卡”的感觉）
-    try { imgEl.decoding = "async"; } catch (_) {}
-
-    const hi = new Image();
-    hi.src = full;
-
-    hi.onload = () => {
-      // 先替换 src，再等一帧加 is-loaded，动画更稳
-      imgEl.src = full;
-      requestAnimationFrame(() => {
-        imgEl.classList.add("is-loaded");
-        imgEl.dataset.loaded = "1";
-      });
-    };
-
-    hi.onerror = () => {
-      // 高清失败就保留缩略图，不崩
-      imgEl.dataset.loaded = "1";
-    };
-  }
-
-  function setupLazyHiRes(root) {
-    const imgs = Array.from((root || document).querySelectorAll("img[data-full]"));
-
-    // 没有 IntersectionObserver 就直接加载（兼容）
-    if (!("IntersectionObserver" in window)) {
-      imgs.forEach(loadHiResInto);
-      return;
-    }
-
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach((en) => {
-        if (!en.isIntersecting) return;
-        loadHiResInto(en.target);
-        io.unobserve(en.target);
-      });
-    }, { threshold: 0.12 });
-
-    imgs.forEach((img) => io.observe(img));
-  }
-
-  function fillPhotoView(item) {
-    const img = qs("#photo-view-img");
-    const title = qs("#photo-view-title");
-    const date = qs("#photo-view-date");
-    const desc = qs("#photo-view-desc");
-    if (!img || !title || !date || !desc) return;
-
-    const t = item.title || "未命名";
-    const d = item.date || "";
-    const thumb = item.thumb || item.src || "";
-    const full = item.src || "";
-    const ds = item.desc || "";
-
-    img.classList.remove("is-loaded");
-    img.dataset.loaded = "0";
-    img.src = thumb;
-    img.dataset.full = full;
-    img.alt = t;
-    try { img.decoding = "async"; } catch (_) {}
-
-    title.textContent = t;
-    date.textContent = d;
-    desc.textContent = ds;
-
-    // 放大预览里：直接加载高清（更爽）
-    loadHiResInto(img);
+  function markLoaded(img) {
+    if (!img) return;
+    img.classList.add("is-loaded");
   }
 
   async function renderPhotoGallery() {
@@ -135,33 +303,29 @@
     host.innerHTML = '<p class="muted">正在加载照片…</p>';
 
     try {
-      const items = await loadPhotosOnce();
+      const res = await fetch("data/photos.json", { cache: "no-store" });
+      if (!res.ok) throw new Error("fetch photos.json failed: " + res.status);
 
+      const items = await res.json();
       if (!Array.isArray(items) || items.length === 0) {
         host.innerHTML = '<p class="muted">暂无照片。先往 /photos 放图片，再改 data/photos.json。</p>';
         return;
       }
 
-      // ✅ 一次性生成 HTML（简单且快），再用懒加载高清
       host.innerHTML = items.map((it, idx) => {
         const title = it.title || "未命名";
         const date = it.date || "";
-        const thumb = it.thumb || it.src || "";
-        const full = it.src || "";
+        const src = it.src || "";
         const desc = it.desc || "";
 
         return `
-          <div class="photo-card" data-idx="${idx}">
+          <div class="photo-card" data-idx="${idx}"
+               data-title="${escapeHtml(title)}"
+               data-date="${escapeHtml(date)}"
+               data-src="${escapeHtml(src)}"
+               data-desc="${escapeHtml(desc)}">
             <div class="photo-media">
-              <img class="photo-img"
-                   src="${escapeHtml(thumb)}"
-                   data-full="${escapeHtml(full)}"
-                   data-loaded="0"
-                   alt="${escapeHtml(title)}"
-                   loading="lazy"
-                   decoding="async"
-                   width="900"
-                   height="900" />
+              <img class="photo-img" src="${escapeHtml(src)}" alt="${escapeHtml(title)}" loading="lazy" decoding="async" />
             </div>
             <div class="photo-meta">
               <p class="photo-title">${escapeHtml(title)}</p>
@@ -172,25 +336,52 @@
         `;
       }).join("");
 
-      // 列表：进入视口才换高清 + 渐清晰
-      setupLazyHiRes(host);
-
-      // 点击卡片：放大预览（先填数据再打开）
-      host.querySelectorAll(".photo-card").forEach((card) => {
-        card.addEventListener("click", () => {
-          const idx = Number(card.dataset.idx || "0");
-          const item = items[idx];
-          if (!item) return;
-
-          fillPhotoView(item);
-          openModal(qs("#modal-photo-view"));
-        });
+      // blur-up：加载完成后变清晰
+      qsa(".photo-img", host).forEach((img) => {
+        if (img.complete) markLoaded(img);
+        else img.addEventListener("load", () => markLoaded(img), { once: true });
       });
+
+      // 点击卡片：打开 lightbox
+      host.addEventListener("click", (e) => {
+        const card = e.target && e.target.closest && e.target.closest(".photo-card");
+        if (!card) return;
+
+        const src = card.dataset.src || "";
+        const title = card.dataset.title || "";
+        const date = card.dataset.date || "";
+        const desc = card.dataset.desc || "";
+
+        openPhotoView({ src, title, date, desc });
+      }, { passive: true });
 
     } catch (err) {
       console.error(err);
       host.innerHTML = '<p class="muted">加载失败：检查 data/photos.json 是否存在、JSON 是否有效、图片路径是否正确。</p>';
     }
+  }
+
+  function openPhotoView({ src, title, date, desc }) {
+    const modal = qs("#modal-photo-view");
+    if (!modal) return;
+
+    const img = qs("#photo-view-img");
+    const t = qs("#photo-view-title");
+    const d = qs("#photo-view-date");
+    const c = qs("#photo-view-desc");
+
+    if (t) t.textContent = title || "";
+    if (d) d.textContent = date || "";
+    if (c) c.textContent = desc || "";
+
+    if (img) {
+      img.classList.remove("is-loaded");
+      img.src = src || "";
+      if (img.complete) markLoaded(img);
+      else img.addEventListener("load", () => markLoaded(img), { once: true });
+    }
+
+    openModal(modal);
   }
 
   // =========================
@@ -203,16 +394,15 @@
     if (!snap) return;
     if (_unlockScroll) return;
 
-    const snapTop = snap.scrollTop;
-
-    // 给 CSS 一个状态（你 CSS 里用 body.modal-open）
     document.body.classList.add("modal-open");
 
-    // 1) 锁 snap 自己
+    const snapTop = snap.scrollTop;
+
+    // 1) 锁 snap
     snap.dataset.prevOverflowY = snap.style.overflowY || "";
     snap.style.overflowY = "hidden";
 
-    // 2) 同时锁 html/body（防 iOS 滚动链/回弹）
+    // 2) 同时锁 html/body（防 iOS 回弹）
     const html = document.documentElement;
     const body = document.body;
     html.dataset.prevOverflow = html.style.overflow || "";
@@ -220,13 +410,13 @@
     html.style.overflow = "hidden";
     body.style.overflow = "hidden";
 
-    // 3) 强制保持 snap 的 scrollTop（极少数机型会被带动）
+    // 3) 强制保持 snap 的 scrollTop
     const keepSnap = () => {
       if (snap.scrollTop !== snapTop) snap.scrollTop = snapTop;
     };
     snap.addEventListener("scroll", keepSnap, { passive: true });
 
-    // 4) 关键：解决“弹窗空白处滑动带动背景”
+    // 4) 阻断“弹窗空白处滑动带动背景”
     let startY = 0;
 
     const onTouchStart = (e) => {
@@ -238,14 +428,14 @@
     const onTouchMove = (e) => {
       const panel = e.target && e.target.closest && e.target.closest(".modal-panel");
 
-      // 不在 panel 内（遮罩/空白）：一律阻止
+      // 不在 panel：遮罩/空白区域 => 阻止
       if (!panel) {
         e.preventDefault();
         return;
       }
 
       const curY = e.touches ? e.touches[0].clientY : startY;
-      const dy = curY - startY; // dy>0 下拉，dy<0 上推
+      const dy = curY - startY;
 
       const canScroll = panel.scrollHeight > panel.clientHeight + 1;
       if (!canScroll) {
@@ -335,7 +525,7 @@
   }
 
   // =========================
-  // Modal（含“闲时笔谈”同步 + 摄影加载）
+  // Modal（含“闲时笔谈”同步）
   // =========================
   function openModal(modal) {
     if (!modal) return;
@@ -345,12 +535,10 @@
     modal.classList.add("open");
     modal.setAttribute("aria-hidden", "false");
 
-    // 摄影：打开时渲染画廊（不会重复下载 JSON，因为有缓存）
     if (modal.id === "modal-photo") {
       renderPhotoGallery();
     }
 
-    // 闲时笔谈：同步内容
     if (modal.id === "modal-notes") {
       const src = qs(".center-body");
       const dst = qs("#notes-modal-body");
@@ -363,55 +551,11 @@
 
   function closeModal(modal) {
     if (!modal) return;
-
     modal.classList.remove("open");
     modal.setAttribute("aria-hidden", "true");
 
-    // 还有其他 modal 开着就别解锁
-    if (!qs(".modal.open")) {
-      unlockSnapScroll();
-    }
-  }
-
-  // =========================
-  // 背景 Cross-fade（丝滑）
-  // =========================
-  function createBgFader() {
-    let current = getComputedStyle(document.documentElement)
-      .getPropertyValue("--page-bg")
-      .trim();
-    let transitioning = false;
-
-    function setVar(name, val) {
-      document.documentElement.style.setProperty(name, val);
-    }
-
-    function fadeTo(nextBg) {
-      if (!nextBg) return;
-      if (nextBg === current) return;
-
-      if (transitioning) {
-        setVar("--page-bg-next", nextBg);
-        return;
-      }
-
-      transitioning = true;
-      setVar("--page-bg-next", nextBg);
-      document.body.classList.add("bg-fading");
-
-      const ms =
-        parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--bg-fade-ms")) ||
-        900;
-
-      setTimeout(() => {
-        current = nextBg;
-        setVar("--page-bg", current);
-        document.body.classList.remove("bg-fading");
-        transitioning = false;
-      }, ms + 60);
-    }
-
-    return { fadeTo };
+    // 如果没有任何弹窗打开了，再解锁
+    if (!qs(".modal.open")) unlockSnapScroll();
   }
 
   // =========================
@@ -521,13 +665,60 @@
   }
 
   // =========================
+  // 翻页切换季节：顶部渐变 + 特效
+  // =========================
+  function setupSeasonSwitcher(seasonFx) {
+    const snap = qs("#snap");
+    const sections = qsa(".section", snap);
+    if (!snap || sections.length === 0) return;
+
+    let cur = "";
+
+    function pickCurrentSection() {
+      // 用 “距离屏幕上方某个点最近的 section” 做判定，稳定
+      const probeY = 140;
+      let best = Infinity;
+      let chosen = sections[0];
+
+      for (const sec of sections) {
+        const r = sec.getBoundingClientRect();
+        const d = Math.abs(r.top - probeY);
+        if (d < best) { best = d; chosen = sec; }
+      }
+      return chosen;
+    }
+
+    function applySeason() {
+      const sec = pickCurrentSection();
+      if (!sec) return;
+
+      const nextSeason = seasonBySectionId(sec.id);
+      if (nextSeason === cur) return;
+
+      cur = nextSeason;
+      setTopGradient(cur);
+      seasonFx.setSeason(cur);
+    }
+
+    // 初始
+    applySeason();
+
+    let raf = 0;
+    snap.addEventListener("scroll", () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(applySeason);
+    }, { passive: true });
+  }
+
+  // =========================
   // 启动
   // =========================
   document.addEventListener("DOMContentLoaded", () => {
     setupNoBlueSelectionOnTap();
+    setupHeroReplayOnEnter();
 
-    // 预取 photos.json（提升第一次打开摄影弹窗速度）
-    prefetchPhotosJson();
+    const seasonFx = setupSeasonFx();
+    setupSeasonSwitcher(seasonFx);
 
     // 打开 modal
     qsa("[data-modal]").forEach((btn) => {

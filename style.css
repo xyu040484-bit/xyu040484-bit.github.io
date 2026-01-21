@@ -583,3 +583,143 @@ p{ margin: 10px 0 0; line-height: 1.75; }
   line-height: 1.7;
   white-space: pre-wrap;
 }
+/* =========================
+   Home title premium motion (GPT-like bars + gradient fill)
+   只作用首页 Hero 标题，不影响顶部栏
+   ========================= */
+
+:root{
+  /* 动态强调色：JS 会在每次进入首页时写入这些变量 */
+  --accent-1: #6d5efc;
+  --accent-2: #22c55e;
+  --accent-3: #f59e0b;
+  --accent-4: #06b6d4;
+  --accent-text-a: #6d5efc;
+  --accent-text-b: #06b6d4;
+}
+
+/* 标题布局 */
+.hero-title{
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* GPT 彩条小图标 */
+.gptmark{
+  width: 30px;
+  height: 34px;
+  display: grid;
+  grid-template-rows: repeat(4, 1fr);
+  gap: 4px;
+  padding: 2px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.65);
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.08);
+}
+
+.gptmark i{
+  position: relative;
+  display: block;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(0,0,0,0.08); /* 轨道 */
+}
+
+/* “填充条”：默认是 0，播放时从左到右填满 */
+.gptmark i::before{
+  content:"";
+  position: absolute;
+  inset: 0;
+  transform: scaleX(0);
+  transform-origin: left;
+  border-radius: 999px;
+  filter: saturate(1.05);
+}
+
+/* 四条分别用四个强调色 */
+.gptmark i:nth-child(1)::before{ background: linear-gradient(90deg, var(--accent-1), rgba(255,255,255,0.0)); }
+.gptmark i:nth-child(2)::before{ background: linear-gradient(90deg, var(--accent-2), rgba(255,255,255,0.0)); }
+.gptmark i:nth-child(3)::before{ background: linear-gradient(90deg, var(--accent-3), rgba(255,255,255,0.0)); }
+.gptmark i:nth-child(4)::before{ background: linear-gradient(90deg, var(--accent-4), rgba(255,255,255,0.0)); }
+
+/* xianyu 渐变文字（默认静态；播放时 shimmer） */
+.hero-name{
+  background: linear-gradient(90deg, var(--accent-text-a), var(--accent-text-b));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+
+/* 播放：给 body 加类时触发 */
+body.hero-anim .gptmark i::before{
+  animation: barFill 900ms cubic-bezier(.22,1,.36,1) forwards;
+}
+
+/* 四条“肉眼可见速度”依次填充 */
+body.hero-anim .gptmark i:nth-child(1)::before{ animation-delay: 0ms; }
+body.hero-anim .gptmark i:nth-child(2)::before{ animation-delay: 90ms; }
+body.hero-anim .gptmark i:nth-child(3)::before{ animation-delay: 180ms; }
+body.hero-anim .gptmark i:nth-child(4)::before{ animation-delay: 270ms; }
+
+/* 文本 shimmer：高级感 */
+body.hero-anim .hero-name{
+  background-size: 200% 100%;
+  animation: textShimmer 1200ms ease forwards;
+}
+
+/* 关键帧 */
+@keyframes barFill{
+  0%{ transform: scaleX(0); opacity: .9; }
+  100%{ transform: scaleX(1); opacity: 1; }
+}
+
+@keyframes textShimmer{
+  0%{ background-position: 0% 50%; filter: saturate(1.05); }
+  100%{ background-position: 100% 50%; filter: saturate(1.15); }
+}
+
+/* 降低动态偏好 */
+@media (prefers-reduced-motion: reduce){
+  body.hero-anim .gptmark i::before,
+  body.hero-anim .hero-name{
+    animation: none !important;
+    transform: none !important;
+  }
+}
+/* =========================
+   Topbar xianyu：渐变字（翻页变色）
+   ========================= */
+:root{
+  --top-a: #22c55e;
+  --top-b: #fb7185;
+}
+
+/* 顶部栏的 xianyu 渐变（只影响 topbar，不影响首页 hero） */
+.topbar .name{
+  background: linear-gradient(90deg, var(--top-a), var(--top-b));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* =========================
+   Season FX canvas（JS 会自动创建）
+   ========================= */
+#seasonFx{
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+/* 减少动态偏好：关掉特效 */
+@media (prefers-reduced-motion: reduce){
+  #seasonFx{ display: none; }
+}
