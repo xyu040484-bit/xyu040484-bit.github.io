@@ -315,7 +315,7 @@
 
     // ✅ 更少：数量下降
     const isMobile = matchMedia("(max-width: 820px)").matches;
-    const MAX = isMobile ? 14 : 26;
+    const MAX = isMobile ? 8 : 40;
 
     // ✅ 排除区：当前视口内“主卡片”区域（扩大一点 margin）
     let exclude = { x0: 0, y0: 0, x1: 0, y1: 0, valid: false };
