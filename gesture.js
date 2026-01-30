@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// 数值保持您调教的版本
+// 参数保持您调教的版本
 const CONFIG = {
   rotSpeed: 0.005,
   zoomSensitivity: 1.0,
@@ -23,14 +23,14 @@ const STATE = {
 let scene, camera, renderer, treeGroup, controls, raycaster, pointer;
 let photoObjects = [], hands, cameraPipe, rafId;
 
-// DOM 元素
+// DOM
 const overlay = document.getElementById('gesture-overlay');
 const captionEl = document.getElementById('gesture-caption');
 const hudBorder = document.getElementById('hud-border');
 const lockStatus = document.getElementById('lock-status');
 const loadingEl = document.getElementById('gesture-loading');
 
-// 1. 初始化 3D 场景
+// 1. 初始化 3D
 function init3D() {
   if (scene) return;
   scene = new THREE.Scene(); scene.fog = new THREE.FogExp2(0x000000, 0.01);
@@ -42,7 +42,6 @@ function init3D() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-  // 粒子星空
   treeGroup = new THREE.Group();
   const geo = new THREE.BufferGeometry(), pos = [], col = [];
   const c1 = new THREE.Color(0x00ffcc), c2 = new THREE.Color(0x9900ff);
@@ -77,7 +76,55 @@ function init3D() {
   window.addEventListener('resize', onResize);
 }
 
-// 2. 加载照片 (高清修复版)
+// 2. 绘制单张照片 (辅助函数：负责画高清拍立得)
+function drawSpriteCanvas(image, descText) {
+  const imgW = image.naturalWidth;
+  const imgH = image.naturalHeight;
+  
+  // 设定标准宽度，高度自适应
+  const contentW = 600; 
+  const contentH = (imgH / imgW) * contentW;
+  
+  // 相框边距
+  const padding = 40; 
+  const bottomBezel = 160; // 底部留白写字
+  
+  const canvasW = contentW + padding * 2;
+  const canvasH = contentH + padding + bottomBezel;
+  
+  const canvas = document.createElement('canvas');
+  canvas.width = canvasW;
+  canvas.height = canvasH;
+  const ctx = canvas.getContext('2d');
+  
+  // 画白底
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvasW, canvasH);
+  
+  // 画黑底（照片衬底）
+  ctx.fillStyle = "#111";
+  ctx.fillRect(padding, padding, contentW, contentH);
+  
+  // 画照片
+  ctx.drawImage(image, padding, padding, contentW, contentH);
+  
+  // ✅ 关键升级：把文字写在底部留白处
+  if (descText) {
+    ctx.fillStyle = "#333";
+    ctx.font = "bold 32px 'Segoe UI', monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(descText, canvasW / 2, canvasH - bottomBezel / 2);
+  }
+  
+  // 计算物理尺寸比例 (基准宽度 3.0)
+  const worldScaleX = 3.0;
+  const worldScaleY = 3.0 * (canvasH / canvasW);
+  
+  return { canvas, scale: { x: worldScaleX, y: worldScaleY } };
+}
+
+// 3. 加载照片 (渐进式：先糊后清)
 async function loadPhotos() {
   try {
     const res = await fetch('data/photos.json');
@@ -86,70 +133,73 @@ async function loadPhotos() {
     
     photoObjects.forEach(p => treeGroup.remove(p)); photoObjects = [];
 
-    // 预加载所有图片
-    const promises = items.map((item, index) => {
-      return new Promise((resolve) => {
-        const t = index / items.length;
-        const r = (1 - t) * 7; 
-        const angle = t * Math.PI * 10; // 这里的 10 可以调大让螺旋更密
-        
-        // ✅ 升级：大幅提升画布分辨率 (从300升至800)，保证放大后清晰
-        const canvas = document.createElement('canvas'); 
-        canvas.width = 800; canvas.height = 960; 
-        const ctx = canvas.getContext('2d');
-        
-        const img = new Image();
-        img.crossOrigin = "Anonymous";
-        
-        // ✅ 关键修复：强制加载 src (高清原图)，不再用 thumb
-        img.src = item.src;
+    // 第一步：快速加载 Thumb (缩略图)
+    items.forEach((item, index) => {
+      // 螺旋排布
+      const t = index / items.length;
+      const r = (1 - t) * 7; 
+      const angle = t * Math.PI * 10;
+      const x = (r + 0.5) * Math.cos(angle);
+      const y = t * 18 - 9;
+      const z = (r + 0.5) * Math.sin(angle);
 
-        img.onload = () => {
-          // 绘制高清拍立得边框
-          ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 800, 960);
-          ctx.fillStyle = "#111"; ctx.fillRect(40, 40, 720, 720);
-          
-          // 绘制高清图片
-          ctx.drawImage(img, 40, 40, 720, 720);
+      const thumbImg = new Image();
+      thumbImg.crossOrigin = "Anonymous";
+      thumbImg.src = item.thumb || item.src; // 优先用 thumb
 
-          const tex = new THREE.CanvasTexture(canvas); 
-          tex.colorSpace = THREE.SRGBColorSpace;
-          // 开启各向异性过滤，让侧面看也清晰
-          tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-          
-          const mat = new THREE.SpriteMaterial({ map: tex });
-          const sprite = new THREE.Sprite(mat);
-          
-          // 位置
-          sprite.position.set((r + 0.5) * Math.cos(angle), t * 18 - 9, (r + 0.5) * Math.sin(angle));
-          
-          // 尺寸保持不变 (物理尺寸)
-          sprite.scale.set(3, 3.6, 1);
-          
-          sprite.userData = { 
-            id: index, 
-            desc: item.desc || item.title || "No Desc", 
-            orgScale: { x: 3, y: 3.6 } 
-          };
-          
-          treeGroup.add(sprite);
-          photoObjects.push(sprite);
-          resolve();
+      thumbImg.onload = () => {
+        // 绘制低清版
+        const { canvas, scale } = drawSpriteCanvas(thumbImg, item.desc || item.title);
+        
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const mat = new THREE.SpriteMaterial({ map: tex });
+        const sprite = new THREE.Sprite(mat);
+        
+        sprite.position.set(x, y, z);
+        sprite.scale.set(scale.x, scale.y, 1);
+        
+        sprite.userData = { 
+          id: index, 
+          desc: item.desc || item.title || "", 
+          orgScale: scale,
+          fullSrc: item.src, // 记录高清图地址
+          isHD: false // 标记当前是否为高清
         };
-        img.onerror = resolve; // 即使失败也继续，避免卡死
-      });
-    });
+        
+        treeGroup.add(sprite);
+        photoObjects.push(sprite);
 
-    await Promise.all(promises);
+        // ✅ 第二步：静默加载高清原图，并在加载完成后无缝替换
+        const hdImg = new Image();
+        hdImg.crossOrigin = "Anonymous";
+        hdImg.src = item.src;
+        hdImg.onload = () => {
+          // 重新绘制高清版
+          const hdResult = drawSpriteCanvas(hdImg, item.desc || item.title);
+          const hdTex = new THREE.CanvasTexture(hdResult.canvas);
+          hdTex.colorSpace = THREE.SRGBColorSpace;
+          hdTex.anisotropy = renderer.capabilities.getMaxAnisotropy(); // 开启各向异性过滤（防侧面糊）
+          
+          // 平滑替换纹理
+          sprite.material.map = hdTex;
+          sprite.material.needsUpdate = true;
+          sprite.scale.set(hdResult.scale.x, hdResult.scale.y, 1); // 修正比例（防止缩略图和原图比例不一致）
+          sprite.userData.orgScale = hdResult.scale;
+          sprite.userData.isHD = true;
+        };
+      };
+    });
+    
     loadingEl.style.display = 'none';
 
   } catch (e) { 
     console.error(e); 
-    loadingEl.innerText = "照片数据加载失败"; 
+    loadingEl.innerText = "Error loading photos"; 
   }
 }
 
-// 3. 高亮逻辑
+// 4. 高亮与交互
 function highlightPhoto(target) {
   photoObjects.forEach(p => {
     p.renderOrder = 0; p.material.depthTest = true; 
@@ -159,10 +209,15 @@ function highlightPhoto(target) {
   
   if (target) {
     target.renderOrder = 999; target.material.depthTest = false; target.material.opacity = 1;
-    // 放大倍数
-    target.scale.set(3.5, 4.2, 1);
-    captionEl.innerText = target.userData.desc; captionEl.style.opacity = 1;
-  } else { captionEl.style.opacity = 0; }
+    // 放大 1.2 倍
+    target.scale.set(target.userData.orgScale.x * 1.2, target.userData.orgScale.y * 1.2, 1);
+    
+    // 底部浮动文案 (可选，因为现在照片上也有字了)
+    // captionEl.innerText = target.userData.desc; 
+    // captionEl.style.opacity = 1; 
+  } else { 
+    // captionEl.style.opacity = 0; 
+  }
 }
 
 function flyToPhoto(obj) {
@@ -219,7 +274,7 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-// 4. 手势
+// 5. 手势
 async function initHands() {
   if (hands) return;
   const video = document.getElementById('input-video'), canvas = document.getElementById('output-canvas'), ctx = canvas.getContext('2d'), hudText = document.getElementById('zoom-status');
@@ -264,10 +319,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const openBtn = document.getElementById('btn-open-gesture');
   const closeBtn = document.getElementById('btn-close-gesture');
   const modeBtn = document.getElementById('mode-switch');
-  
   if (openBtn) openBtn.addEventListener('click', startGestureSystem);
   if (closeBtn) closeBtn.addEventListener('click', stopGestureSystem);
-  
   if (modeBtn) {
     modeBtn.onclick = () => {
       if (STATE.mode === 'GESTURE') {
