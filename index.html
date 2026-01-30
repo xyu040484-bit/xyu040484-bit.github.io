@@ -5,23 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>xianyu | 个人主页</title>
   <link rel="stylesheet" href="style.css" />
+  
+  <script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }</script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 </head>
 
 <body>
+  <div id="intro-splash" class="intro-splash">
+    <div class="intro-content">
+      <div class="intro-hello">HELLO</div>
+      <div class="intro-name">xianyu</div>
+    </div>
+  </div>
+
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
         <div class="name">xianyu</div>
         <div class="tagline">摄影 / 3D 打印 / 羽毛球 / AI</div>
       </div>
-
       <nav class="nav">
         <a href="#home">首页</a>
         <a href="#hobby">摄影&3D打印</a>
         <a href="#notes">闲时笔谈</a>
         <a href="#contact">联系</a>
       </nav>
-
       <div class="avatar-wrap" title="头像">
         <img src="avatar.jpg" alt="头像" class="avatar" />
       </div>
@@ -30,45 +41,34 @@
   </header>
 
   <main class="snap" id="snap">
-    <!-- 首页 -->
     <section id="home" class="section" data-bg="linear-gradient(135deg,#eef2ff,#e2e8ff)">
       <div class="container">
         <div class="card hero">
-         <div class="hero-brand">
-  <div class="gpt-mark" aria-hidden="true">
-    <span class="strip s1"></span>
-    <span class="strip s2"></span>
-    <span class="strip s3"></span>
-    <span class="strip s4"></span>
-  </div>
-<h1 class="hero-title">
-  <span class="gptmark" aria-hidden="true">
-    <i></i><i></i><i></i><i></i>
-  </span>
-  <span class="hero-title-text">你好，我是 <span class="hero-name">xianyu</span></span>
-</h1>
-
-</div>
-
+          <div class="hero-brand">
+            <div class="gpt-mark" aria-hidden="true">
+              <span class="strip s1"></span><span class="strip s2"></span><span class="strip s3"></span><span class="strip s4"></span>
+            </div>
+            <h1 class="hero-title">
+              <span class="gptmark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+              <span class="hero-title-text">你好，我是 <span class="hero-name">xianyu</span></span>
+            </h1>
+          </div>
           <p class="lead">欢迎你的到来。我会在这里逐步放上我的作品、笔记和一些小想法。</p>
           <p class="muted">温馨提示：滚轮会按屏翻页；你也可以点导航跳到对应板块。</p>
         </div>
       </div>
     </section>
 
-    <!-- 摄影&3D打印 -->
     <section id="hobby" class="section" data-bg="linear-gradient(135deg,#e7f0ff,#f3f7ff)">
       <div class="container">
         <div class="card">
           <h2>我的兴趣入口</h2>
           <p class="muted">点击下面的卡片会弹出一个“界面”，或许在这里你会有些惊奇的发现。</p>
-
           <div class="grid2">
             <button class="tile" type="button" data-modal="modal-photo">
               <div class="tile-title">摄影</div>
               <div class="tile-desc">照片 / 器材 / 记录</div>
             </button>
-
             <button class="tile" type="button" data-modal="modal-print">
               <div class="tile-title">3D 打印</div>
               <div class="tile-desc">模型 / 参数 / 成品</div>
@@ -78,15 +78,12 @@
       </div>
     </section>
 
-    <!-- 闲时笔谈 -->
     <section id="notes" class="section" data-bg="linear-gradient(135deg,#e9fff4,#f4fffb)">
       <div class="container">
         <div class="card">
           <h2>我的闲时笔谈</h2>
           <p class="muted">中间内容区可单独滚动；左右是我的两个兴趣爱好的侧栏。</p>
-
           <div class="tri">
-            <!-- 左：羽毛球 -->
             <aside class="side">
               <div class="side-title">羽毛球</div>
               <div class="side-body">
@@ -94,28 +91,18 @@
                 <p class="muted">ps：（实则是菜的没眼看了，憋了半天才出来这么一句。）</p>
               </div>
             </aside>
-
-            <!-- 中：笔谈滚动区 -->
             <article class="center-scroll" aria-label="闲时笔谈内容区">
               <div class="center-title">
                 闲时笔谈（可滚动）
                 <button class="mini-btn" type="button" data-modal="modal-notes">放大</button>
               </div>
-
-              <!-- ✅ 注意：所有内容都必须放在 center-body 里 -->
               <div class="center-body">
                 <p><a href="notes/2026.1.18闲时笔谈1.html">2026-01-18｜2026.1.18闲时笔谈1</a></p>
                 <p><a href="notes/2026.1.20闲时笔谈2.html">2026-01-20｜2026.1.18闲时笔谈2</a></p>
                 <p>……</p>
                 <p>……</p>
-                <p>……</p>
-                <p>……</p>
-                <p>……</p>
-                <p>……</p>
               </div>
             </article>
-
-            <!-- 右：AI -->
             <aside class="side">
               <div class="side-title">AI</div>
               <div class="side-body">
@@ -124,43 +111,41 @@
               </div>
             </aside>
           </div>
-
         </div>
       </div>
     </section>
 
-    <!-- 联系 -->
     <section id="contact" class="section" data-bg="linear-gradient(135deg,#fff2e9,#fff8f3)">
       <div class="container">
         <div class="card">
           <h2>联系我</h2>
           <p class="muted">邮箱：</p>
-
           <div class="email-list">
             <a class="email" href="mailto:xyu040484@gmail.com">xyu040484@gmail.com</a>
-            <a class="email" href="mailto:1444134749@qq.com">1444134749@qq.com</a>
+            <a class="email" href="mailto:xianyu301@outlook.com">xianyu301@outlook.com</a>
           </div>
         </div>
       </div>
     </section>
   </main>
 
-  <!-- 摄影弹窗 -->
   <div class="modal" id="modal-photo" aria-hidden="true">
     <div class="modal-backdrop" data-close></div>
     <div class="modal-panel" role="dialog" aria-modal="true" aria-label="摄影">
       <div class="modal-head">
         <div class="modal-title">摄影</div>
+        <button id="btn-open-gesture" class="icon-btn" style="width:auto; padding:0 12px; margin-right:10px; font-size:14px; border-radius:12px; background:#f0fdf4; color:#16a34a;">
+          🖐️ 3D 模式
+        </button>
         <button class="icon-btn" type="button" data-close aria-label="关闭">×</button>
       </div>
-     <div class="modal-body">
-  <p class="muted">这里会展示我的摄影照片与随手感想。</p>
-  <div id="photo-gallery" class="gallery"></div>
-</div>
+      <div class="modal-body">
+        <p class="muted">这里会展示我的摄影照片与随手感想。</p>
+        <div id="gallery-modal" class="gallery js-gallery-target"></div>
+      </div>
     </div>
   </div>
 
-  <!-- 3D 打印弹窗 -->
   <div class="modal" id="modal-print" aria-hidden="true">
     <div class="modal-backdrop" data-close></div>
     <div class="modal-panel" role="dialog" aria-modal="true" aria-label="3D 打印">
@@ -177,7 +162,6 @@
     </div>
   </div>
 
-  <!-- 闲时笔谈放大弹窗 -->
   <div class="modal" id="modal-notes" aria-hidden="true">
     <div class="modal-backdrop" data-close></div>
     <div class="modal-panel" role="dialog" aria-modal="true" aria-label="闲时笔谈">
@@ -188,25 +172,45 @@
       <div class="modal-body" id="notes-modal-body"></div>
     </div>
   </div>
-<!-- 图片放大预览弹窗（Lightbox） -->
-<div class="modal" id="modal-photo-view" aria-hidden="true">
-  <div class="modal-backdrop" data-close></div>
-  <div class="modal-panel lightbox" role="dialog" aria-modal="true" aria-label="查看照片">
-    <div class="modal-head">
-      <div class="modal-title">查看照片</div>
-      <button class="icon-btn" type="button" data-close aria-label="关闭">×</button>
-    </div>
-    <div class="modal-body">
-      <img id="photo-view-img" class="lightbox-img" alt="photo" />
-      <div class="lightbox-meta">
-        <p id="photo-view-title" class="lightbox-title"></p>
-        <div id="photo-view-date" class="lightbox-date"></div>
-        <div id="photo-view-desc" class="lightbox-desc"></div>
+
+  <div class="modal" id="modal-photo-view" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel lightbox" role="dialog" aria-modal="true" aria-label="查看照片">
+      <div class="modal-head">
+        <div class="modal-title">查看照片</div>
+        <button class="icon-btn" type="button" data-close aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <img id="photo-view-img" class="lightbox-img" alt="photo" />
+        <div class="lightbox-meta">
+          <p id="photo-view-title" class="lightbox-title"></p>
+          <div id="photo-view-date" class="lightbox-date"></div>
+          <div id="photo-view-desc" class="lightbox-desc"></div>
+        </div>
       </div>
     </div>
   </div>
-</div>
+
+  <div id="gesture-overlay" style="display:none;">
+    <canvas id="canvas-layer"></canvas>
+    <div id="hud-container">
+      <div id="hud-border"></div>
+      <video id="input-video" playsinline></video>
+      <canvas id="output-canvas"></canvas>
+      <div class="hud-text" id="zoom-status" style="top:10px; left:10px;">初始化中...</div>
+      <div class="hud-text" id="lock-status" style="bottom:10px; left:10px; color:#f55; display:none;">🔒 锁定视角</div>
+    </div>
+    
+    <div id="gesture-controls">
+      <button id="mode-switch"><span id="mode-icon">🖐️</span> <span id="mode-text">手势模式</span></button>
+      <button id="btn-close-gesture" style="background:rgba(255,50,50,0.2); border-color:rgba(255,50,50,0.5);">❌ 退出</button>
+    </div>
+
+    <div id="gesture-caption"></div>
+    <div id="gesture-loading">SYSTEM INITIALIZING...</div>
+  </div>
 
   <script src="script.js"></script>
+  <script type="module" src="gesture.js"></script>
 </body>
 </html>
