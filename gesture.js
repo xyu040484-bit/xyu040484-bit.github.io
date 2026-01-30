@@ -1,20 +1,20 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// ✅ 还原为您精心调试的数值
+// 数值保持您调教的版本
 const CONFIG = {
-  rotSpeed: 0.005,          // 恢复原速
+  rotSpeed: 0.005,
   zoomSensitivity: 1.0,
   autoSnapDist: 10,
   mouseReturnDist: 15,
   flightSpeed: 0.08,
-  anchorDist: 4.5           // 恢复原来的吸附距离
+  anchorDist: 4.5
 };
 
 const STATE = {
   active: false,
   mode: 'GESTURE',
-  radius: 40,               // 恢复原来的半径
+  radius: 40,
   targetRadius: 40,
   isFlying: false, flyTargetPos: new THREE.Vector3(), flyTargetLook: new THREE.Vector3(),
   isAnchored: false, anchorTarget: null, isZoomingOut: false
@@ -23,7 +23,7 @@ const STATE = {
 let scene, camera, renderer, treeGroup, controls, raycaster, pointer;
 let photoObjects = [], hands, cameraPipe, rafId;
 
-// DOM 元素引用
+// DOM 元素
 const overlay = document.getElementById('gesture-overlay');
 const captionEl = document.getElementById('gesture-caption');
 const hudBorder = document.getElementById('hud-border');
@@ -33,7 +33,7 @@ const loadingEl = document.getElementById('gesture-loading');
 // 1. 初始化 3D 场景
 function init3D() {
   if (scene) return;
-  scene = new THREE.Scene(); scene.fog = new THREE.FogExp2(0x000000, 0.01); // 恢复原来的雾浓度
+  scene = new THREE.Scene(); scene.fog = new THREE.FogExp2(0x000000, 0.01);
 
   camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
   camera.position.set(0, 0, STATE.radius);
@@ -42,11 +42,11 @@ function init3D() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-  // 粒子背景 (保持您的审美)
+  // 粒子星空
   treeGroup = new THREE.Group();
   const geo = new THREE.BufferGeometry(), pos = [], col = [];
   const c1 = new THREE.Color(0x00ffcc), c2 = new THREE.Color(0x9900ff);
-  for (let i = 0; i < 5000; i++) { // 恢复 5000 粒子
+  for (let i = 0; i < 5000; i++) {
     const t = i / 5000;
     const r = (1 - t) * 7 + (Math.random() - 0.5);
     const a = t * Math.PI * 40;
@@ -61,7 +61,7 @@ function init3D() {
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true; controls.dampingFactor = 0.05; controls.enablePan = false;
-  controls.zoomSpeed = 3.0; // 恢复
+  controls.zoomSpeed = 3.0;
   controls.minDistance = 2; controls.maxDistance = 60;
   controls.minPolarAngle = 0; controls.maxPolarAngle = Math.PI;
   controls.enabled = false;
@@ -77,7 +77,7 @@ function init3D() {
   window.addEventListener('resize', onResize);
 }
 
-// 2. 加载照片 (修复：使用 thumb 字段)
+// 2. 加载照片 (高清修复版)
 async function loadPhotos() {
   try {
     const res = await fetch('data/photos.json');
@@ -86,62 +86,81 @@ async function loadPhotos() {
     
     photoObjects.forEach(p => treeGroup.remove(p)); photoObjects = [];
 
-    items.forEach((item, index) => {
-      // 您的螺旋算法
-      const t = Math.random() * 0.9 + 0.05; 
-      const r = (1 - t) * 7; 
-      const angle = Math.random() * Math.PI * 2;
-      
-      const canvas = document.createElement('canvas'); canvas.width = 200; canvas.height = 240;
-      const ctx = canvas.getContext('2d');
-      const img = new Image(); 
-      img.crossOrigin = "Anonymous";
-      
-      // ✅ 关键修复：这里使用 thumb (缩略图) 加载，速度更快
-      img.src = item.thumb || item.src; 
+    // 预加载所有图片
+    const promises = items.map((item, index) => {
+      return new Promise((resolve) => {
+        const t = index / items.length;
+        const r = (1 - t) * 7; 
+        const angle = t * Math.PI * 10; // 这里的 10 可以调大让螺旋更密
+        
+        // ✅ 升级：大幅提升画布分辨率 (从300升至800)，保证放大后清晰
+        const canvas = document.createElement('canvas'); 
+        canvas.width = 800; canvas.height = 960; 
+        const ctx = canvas.getContext('2d');
+        
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        
+        // ✅ 关键修复：强制加载 src (高清原图)，不再用 thumb
+        img.src = item.src;
 
-      img.onload = () => {
-        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 200, 240);
-        ctx.fillStyle = "#111"; ctx.fillRect(10, 10, 180, 180);
-        ctx.drawImage(img, 10, 10, 180, 180);
-        
-        // 文字可选
-        // ctx.fillStyle = "#333"; ctx.font = "20px monospace"; ctx.textAlign = "center"; ctx.fillText(`#${index+1}`, 100, 220);
+        img.onload = () => {
+          // 绘制高清拍立得边框
+          ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 800, 960);
+          ctx.fillStyle = "#111"; ctx.fillRect(40, 40, 720, 720);
+          
+          // 绘制高清图片
+          ctx.drawImage(img, 40, 40, 720, 720);
 
-        const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace;
-        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
-        
-        sprite.position.set((r + 0.5) * Math.cos(angle), t * 18 - 9, (r + 0.5) * Math.sin(angle));
-        
-        // ✅ 恢复您的尺寸比例
-        sprite.scale.set(3, 3.6, 1); 
-        
-        sprite.userData = { 
-          id: index, 
-          desc: item.desc || item.title || "No Desc", 
-          orgScale: { x: 3, y: 3.6 } 
+          const tex = new THREE.CanvasTexture(canvas); 
+          tex.colorSpace = THREE.SRGBColorSpace;
+          // 开启各向异性过滤，让侧面看也清晰
+          tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+          
+          const mat = new THREE.SpriteMaterial({ map: tex });
+          const sprite = new THREE.Sprite(mat);
+          
+          // 位置
+          sprite.position.set((r + 0.5) * Math.cos(angle), t * 18 - 9, (r + 0.5) * Math.sin(angle));
+          
+          // 尺寸保持不变 (物理尺寸)
+          sprite.scale.set(3, 3.6, 1);
+          
+          sprite.userData = { 
+            id: index, 
+            desc: item.desc || item.title || "No Desc", 
+            orgScale: { x: 3, y: 3.6 } 
+          };
+          
+          treeGroup.add(sprite);
+          photoObjects.push(sprite);
+          resolve();
         };
-        treeGroup.add(sprite); photoObjects.push(sprite);
-      };
+        img.onerror = resolve; // 即使失败也继续，避免卡死
+      });
     });
+
+    await Promise.all(promises);
     loadingEl.style.display = 'none';
-  } catch (e) { console.error(e); loadingEl.innerText = "Load Failed"; }
+
+  } catch (e) { 
+    console.error(e); 
+    loadingEl.innerText = "照片数据加载失败"; 
+  }
 }
 
-// 3. 高亮逻辑 (恢复您的缩放比例)
+// 3. 高亮逻辑
 function highlightPhoto(target) {
   photoObjects.forEach(p => {
     p.renderOrder = 0; p.material.depthTest = true; 
     p.scale.set(p.userData.orgScale.x, p.userData.orgScale.y, 1); 
-    p.material.opacity = target ? 0.3 : 1; // 为了突出目标，其他稍微变暗
+    p.material.opacity = target ? 0.3 : 1;
   });
   
   if (target) {
     target.renderOrder = 999; target.material.depthTest = false; target.material.opacity = 1;
-    
-    // ✅ 恢复您的高亮尺寸
+    // 放大倍数
     target.scale.set(3.5, 4.2, 1);
-    
     captionEl.innerText = target.userData.desc; captionEl.style.opacity = 1;
   } else { captionEl.style.opacity = 0; }
 }
@@ -162,27 +181,28 @@ function releaseAnchor() { STATE.isAnchored = false; STATE.anchorTarget = null; 
 function animate() {
   if (!STATE.active) return;
   rafId = requestAnimationFrame(animate);
+  
   if (STATE.isFlying) {
     camera.position.lerp(STATE.flyTargetPos, CONFIG.flightSpeed);
     if (STATE.mode === 'MOUSE') { controls.target.lerp(STATE.flyTargetLook, CONFIG.flightSpeed); controls.update(); } else { camera.lookAt(STATE.flyTargetLook); }
     if (camera.position.distanceTo(STATE.flyTargetPos) < 0.1) STATE.isFlying = false;
     renderer.render(scene, camera); return;
   }
+  
   if (STATE.mode === 'GESTURE') {
     if (STATE.isZoomingOut && STATE.isAnchored) releaseAnchor();
     if (STATE.isAnchored && STATE.anchorTarget) {
       const tPos = new THREE.Vector3(); STATE.anchorTarget.getWorldPosition(tPos);
       const ideal = tPos.clone().add(tPos.clone().normalize().multiplyScalar(CONFIG.anchorDist));
-      camera.position.lerp(ideal, 0.1); // 这里稍微平滑一点
-      camera.lookAt(tPos);
+      camera.position.lerp(ideal, 0.1); camera.lookAt(tPos);
     } else {
-      treeGroup.rotation.y += 0.003; // 恢复 0.003
+      treeGroup.rotation.y += 0.003; 
       STATE.radius += (STATE.targetRadius - STATE.radius) * 0.1;
       camera.position.set(0, 0, STATE.radius); camera.lookAt(0, 0, 0);
       if (STATE.radius < CONFIG.autoSnapDist && !STATE.isZoomingOut) {
         let closest = null, minD = Infinity;
         photoObjects.forEach(p => { const d = camera.position.distanceTo(p.position); if (d < minD) { minD = d; closest = p; } });
-        if (closest && minD < 6) engageAnchor(closest); // 恢复 < 6
+        if (closest && minD < 6) engageAnchor(closest);
       }
     }
   } else {
@@ -199,7 +219,7 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-// 4. 手势识别
+// 4. 手势
 async function initHands() {
   if (hands) return;
   const video = document.getElementById('input-video'), canvas = document.getElementById('output-canvas'), ctx = canvas.getContext('2d'), hudText = document.getElementById('zoom-status');
@@ -213,7 +233,6 @@ async function initHands() {
       window.drawConnectors(ctx, lm, window.HAND_CONNECTIONS, { color: '#00ffcc', lineWidth: 2 });
       window.drawLandmarks(ctx, lm, { color: '#fff', radius: 2 });
       const d = Math.sqrt(Math.pow(lm[8].x - lm[4].x, 2) + Math.pow(lm[8].y - lm[4].y, 2));
-      // 恢复您的判定阈值
       if (d > 0.25) { 
         STATE.isZoomingOut = false; 
         if (!STATE.isAnchored) { STATE.targetRadius -= CONFIG.zoomSensitivity; if (STATE.targetRadius < 3) STATE.targetRadius = 3; hudText.innerText = "ZOOM IN"; hudText.style.color = "#0f0"; } 
@@ -241,7 +260,6 @@ function stopGestureSystem() {
   overlay.style.display = 'none'; STATE.active = false; document.body.style.overflow = ''; if (rafId) cancelAnimationFrame(rafId);
 }
 
-// 绑定按钮事件
 document.addEventListener('DOMContentLoaded', () => {
   const openBtn = document.getElementById('btn-open-gesture');
   const closeBtn = document.getElementById('btn-close-gesture');
