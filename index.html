@@ -6,6 +6,8 @@
   <title>xianyu | 个人主页</title>
   <link rel="stylesheet" href="style.css" />
   
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+
   <script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }</script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
@@ -192,22 +194,28 @@
   </div>
 
   <div id="gesture-overlay" style="display:none;">
-    <canvas id="canvas-layer"></canvas>
-    <div id="hud-container">
-      <div id="hud-border"></div>
-      <video id="input-video" playsinline></video>
-      <canvas id="output-canvas"></canvas>
-      <div class="hud-text" id="zoom-status" style="top:10px; left:10px;">初始化中...</div>
-      <div class="hud-text" id="lock-status" style="bottom:10px; left:10px; color:#f55; display:none;">🔒 锁定视角</div>
-    </div>
+    <div id="canvas-container"></div>
     
-    <div id="gesture-controls">
-      <button id="mode-switch"><span id="mode-icon">🖐️</span> <span id="mode-text">手势模式</span></button>
-      <button id="btn-close-gesture" style="background:rgba(255,50,50,0.2); border-color:rgba(255,50,50,0.5);">❌ 退出</button>
+    <video id="video-input" playsinline></video>
+    
+    <div id="ui-layer">
+      <h1>NOËL CINÉMATIQUE</h1>
+      <div class="status" id="status-text">初始化手势识别...</div>
+      
+      <div id="controls">
+        <button id="btn-close-gesture">退出 (EXIT)</button>
+      </div>
+
+      <div style="margin-top:20px; font-size:0.8em; opacity:0.7; line-height:1.6;">
+        [手势说明]<br>
+        🖐 张开: 星空散开 (Scatter)<br>
+        ✊ 握拳: 聚成圣诞树 (Tree)<br>
+        👌 捏合: 聚焦照片 (Focus)<br>
+        👋 挥手: 旋转视角 (Rotate)
+      </div>
     </div>
 
-    <div id="gesture-caption"></div>
-    <div id="gesture-loading">SYSTEM INITIALIZING...</div>
+    <div id="gesture-loading">INITIALIZING...</div>
   </div>
 
   <script src="script.js"></script>

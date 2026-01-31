@@ -194,46 +194,37 @@ body.hero-anim .gpt-mark .strip {
 #seasonFx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; opacity: 0.9; }
 @media (prefers-reduced-motion: reduce){ #seasonFx{ display: none; } }
 /* =========================
-   Gesture Tree 3D Overlay (手势模式专用样式)
+   Gesture Tree (Christmas Upgrade)
    ========================= */
 #gesture-overlay {
-  position: fixed; inset: 0; z-index: 9999; background: #000;
-  font-family: 'Segoe UI', monospace; overflow: hidden;
+  position: fixed; inset: 0; z-index: 9999; background: #050505;
+  font-family: 'Times New Roman', serif; overflow: hidden;
 }
-#canvas-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; background: radial-gradient(circle at center, #111 0%, #000 100%); }
+#canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
 
-#hud-container {
-  position: absolute; bottom: 20px; right: 20px; width: 200px; height: 150px;
-  pointer-events: none; border-radius: 12px; overflow: hidden;
-  border: 2px solid #00ffcc; background: rgba(0,0,0,0.8); z-index: 10;
+#video-input {
+  position: absolute; bottom: 20px; right: 20px; width: 160px; height: 120px;
+  z-index: 2; border-radius: 10px; border: 2px solid #d4af37; opacity: 0.7; transform: scaleX(-1);
 }
-#input-video { display: none; }
-#output-canvas { width: 100%; height: 100%; transform: scaleX(-1); }
-.hud-text { position: absolute; font-weight: bold; font-size: 12px; text-shadow: 0 0 5px currentColor; color: #fff; }
-#hud-border { position: absolute; inset:0; border: 4px solid #f55; display:none; box-sizing: border-box; }
 
-#gesture-controls {
-  position: absolute; top: 20px; right: 20px; z-index: 20; display: flex; gap: 10px;
+#ui-layer {
+  position: absolute; top: 20px; left: 20px; z-index: 10; color: #d4af37; pointer-events: none;
 }
-#gesture-controls button {
-  background: rgba(255,255,255,0.1); backdrop-filter: blur(10px);
-  border: 1px solid rgba(255,255,255,0.3); color: #fff;
-  padding: 10px 20px; border-radius: 30px; cursor: pointer;
-  font-weight: bold; font-size: 14px; display: flex; align-items: center; gap: 8px;
-  transition: all 0.2s;
+#ui-layer h1 {
+  margin: 0; font-weight: 100; font-size: 2rem; letter-spacing: 5px; text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
 }
-#gesture-controls button:hover { background: rgba(255,255,255,0.2); transform: scale(1.05); }
+#status-text { font-size: 0.9rem; margin-top: 10px; color: #aaa; }
 
-#gesture-caption {
-  position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
-  z-index: 15; color: #fff; font-size: 18px; font-weight: 500;
-  text-align: center; text-shadow: 0 2px 10px rgba(0,0,0,0.8);
-  background: rgba(0,0,0,0.6); padding: 12px 24px; border-radius: 99px;
-  backdrop-filter: blur(5px); opacity: 0; transition: opacity 0.5s; pointer-events: none;
-  border: 1px solid rgba(255,255,255,0.1);
+#controls { pointer-events: auto; margin-top: 20px; }
+#btn-close-gesture {
+  background: rgba(212, 175, 55, 0.1); border: 1px solid #d4af37; color: #d4af37;
+  padding: 10px 20px; cursor: pointer; font-family: inherit; letter-spacing: 2px;
+  transition: all 0.3s ease; text-transform: uppercase; font-size: 0.8rem;
 }
+#btn-close-gesture:hover { background: #d4af37; color: #000; box-shadow: 0 0 15px #d4af37; }
 
 #gesture-loading {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  color: #00ffcc; font-size: 20px; letter-spacing: 2px; z-index: 30; pointer-events: none;
+  color: #d4af37; z-index: 20; letter-spacing: 3px; pointer-events: none;
 }
