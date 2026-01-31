@@ -19,7 +19,9 @@ const CONFIG = {
     photoScale: 6,
     // 聚焦配置
     focus: {
-        scale: 2.0 // 统一放大倍率
+        mobileDist: 22, 
+        pcDist: 20,     // ✅ PC端拉近距离 (大一号)
+        scale: 2.0      
     }
 };
 
@@ -71,7 +73,7 @@ function initThree() {
     // 辉光 (只对铃铛生效)
     const renderScene = new RenderPass(scene, camera);
     const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-    bloomPass.threshold = 0.95; // 阈值很高，只有自发光的铃铛会亮
+    bloomPass.threshold = 0.95; 
     bloomPass.strength = 1.2;
     bloomPass.radius = 0.4;
 
@@ -162,14 +164,13 @@ function createPhotoMesh(texture, index, itemData) {
     const aspect = texture.image.width / texture.image.height;
     const geo = new THREE.PlaneGeometry(CONFIG.photoScale * aspect, CONFIG.photoScale);
     
-    // ✅ 修复：微调照片亮度 (0xe5e5e5 = 90% 白)
-    // 这样既保持清晰，又稍微压暗一点点，完全杜绝过曝和泛光
+    // ✅ 颜色微调：0xd9d9d9 (降低5%亮度，更有质感)
     const mat = new THREE.MeshBasicMaterial({ 
         map: texture, 
         side: THREE.DoubleSide, 
         transparent: true,
         fog: false,
-        color: 0xe5e5e5 
+        color: 0xd9d9d9 
     });
     const mesh = new THREE.Mesh(geo, mat);
     
@@ -183,7 +184,7 @@ function createPhotoMesh(texture, index, itemData) {
         isPhoto: true,
         originalScale: new THREE.Vector3(1,1,1),
         desc: itemData.desc,
-        aspect: aspect // 记录照片长宽比，用于聚焦计算
+        aspect: aspect
     };
 
     mesh.position.set(mesh.userData.treePos.x, mesh.userData.treePos.y, mesh.userData.treePos.z);
@@ -217,7 +218,6 @@ function findBestPhotoToFocus() {
     return best.index;
 }
 
-// --- 核心聚焦逻辑 (智能适配屏幕) ---
 function transitionTo(newState, focusIndex = -1) {
     if (STATE.mode === newState && newState !== 'FOCUS') return;
     STATE.mode = newState;
@@ -239,27 +239,20 @@ function transitionTo(newState, focusIndex = -1) {
                 const camDir = new THREE.Vector3();
                 camera.getWorldDirection(camDir);
                 
-                // ✅ 智能距离计算
-                // 1. 获取屏幕长宽比
                 const screenAspect = window.innerWidth / window.innerHeight;
-                // 2. 获取照片长宽比
                 const photoAspect = mesh.userData.aspect;
                 
-                let dist = 25; // 默认距离 (PC 调大一点，照片更大)
+                // 默认 PC 距离
+                let dist = CONFIG.focus.pcDist; 
 
-                // 3. 判断是否需要拉远
-                // 如果是手机竖屏 (ScreenAspect < 1) 且 照片是横图 (PhotoAspect > 1)
-                // 或者照片特别宽
                 if (screenAspect < photoAspect) {
-                    // 需要根据宽度适配：屏幕越窄，距离越远
-                    // 动态公式：基础距离 * (照片宽 / 屏幕宽)
-                    dist = 22 * (photoAspect / screenAspect) * 0.6; 
-                } else {
-                    // 竖屏看竖图，或者电脑看图 -> 拉近一点
-                    dist = 25; 
+                    // 手机看横图，距离拉远
+                    dist = CONFIG.focus.mobileDist * (photoAspect / screenAspect) * 0.6; 
+                } else if (screenAspect < 1.0) {
+                    // 手机看竖图
+                    dist = CONFIG.focus.mobileDist;
                 }
 
-                // 限制最近和最远距离
                 dist = Math.max(15, Math.min(dist, 60));
 
                 target = { 
