@@ -227,4 +227,45 @@ body.hero-anim .gpt-mark .strip {
 #gesture-loading {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   color: #d4af37; z-index: 20; letter-spacing: 3px; pointer-events: none;
+}/* =========================
+   Gesture Tree (Updated)
+   ========================= */
+#gesture-overlay {
+  position: fixed; inset: 0; z-index: 9999; background: #050505;
+  font-family: 'Times New Roman', serif; overflow: hidden;
+}
+#canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+
+#video-input {
+  position: absolute; bottom: 20px; right: 20px; width: 160px; height: 120px;
+  z-index: 2; border-radius: 10px; border: 2px solid #d4af37; opacity: 0.7; transform: scaleX(-1);
+  transition: opacity 0.5s;
+}
+/* 鼠标模式下隐藏摄像头画面 */
+#video-input.hidden { opacity: 0; pointer-events: none; }
+
+#ui-layer {
+  position: absolute; top: 20px; left: 20px; z-index: 10; color: #d4af37; pointer-events: none;
+  width: 300px;
+}
+#ui-layer h1 {
+  margin: 0; font-weight: 100; font-size: 2rem; letter-spacing: 5px; text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+}
+#status-text { font-size: 0.9rem; margin-top: 10px; color: #aaa; }
+
+#controls { pointer-events: auto; margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+#controls button {
+  background: rgba(212, 175, 55, 0.1); border: 1px solid #d4af37; color: #d4af37;
+  padding: 8px 16px; cursor: pointer; font-family: inherit; letter-spacing: 1px;
+  transition: all 0.3s ease; text-transform: uppercase; font-size: 0.8rem; border-radius: 4px;
+}
+#controls button:hover { background: #d4af37; color: #000; box-shadow: 0 0 15px #d4af37; }
+
+#mouse-controls { display: flex; }
+
+#gesture-loading {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  color: #d4af37; z-index: 20; letter-spacing: 3px; pointer-events: none;
 }

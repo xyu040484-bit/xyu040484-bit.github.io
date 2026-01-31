@@ -195,23 +195,27 @@
 
   <div id="gesture-overlay" style="display:none;">
     <div id="canvas-container"></div>
-    
     <video id="video-input" playsinline></video>
     
     <div id="ui-layer">
       <h1>NOËL CINÉMATIQUE</h1>
-      <div class="status" id="status-text">初始化手势识别...</div>
+      <div class="status" id="status-text">初始化...</div>
       
       <div id="controls">
-        <button id="btn-close-gesture">退出 (EXIT)</button>
+        <button id="btn-input-mode" title="切换控制模式">🖐️ 手势模式</button>
+        <div id="mouse-controls" style="display:none; gap:10px;">
+          <button id="btn-tree" class="action-btn">🎄 聚树</button>
+          <button id="btn-scatter" class="action-btn">✨ 散开</button>
+        </div>
+        <button id="btn-close-gesture" style="margin-left:auto;">退出</button>
       </div>
 
-      <div style="margin-top:20px; font-size:0.8em; opacity:0.7; line-height:1.6;">
+      <div id="gesture-guide" style="margin-top:20px; font-size:0.8em; opacity:0.7; line-height:1.6;">
         [手势说明]<br>
-        🖐 张开: 星空散开 (Scatter)<br>
-        ✊ 握拳: 聚成圣诞树 (Tree)<br>
-        👌 捏合: 聚焦照片 (Focus)<br>
-        👋 挥手: 旋转视角 (Rotate)
+        🖐 张开: 星空散开<br>
+        ✊ 握拳: 聚成圣诞树<br>
+        👌 捏合: 聚焦照片<br>
+        👋 挥手: 旋转视角
       </div>
     </div>
 
