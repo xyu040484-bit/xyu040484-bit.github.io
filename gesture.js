@@ -23,11 +23,11 @@ const CONFIG = {
 const STATE = {
     active: false,
     inputMode: 'GESTURE',
-    mode: 'TREE', // TREE, SCATTER, FOCUS
+    mode: 'TREE',
     handPresent: false,
     rotationTarget: { x: 0, y: 0 },
     focusedPhotoIndex: -1,
-    hoveredPhotoIndex: -1 // 新增：手势悬停的目标
+    hoveredPhotoIndex: -1
 };
 
 // --- GLOBALS ---
@@ -35,7 +35,7 @@ let scene, camera, renderer, composer, controlsOrbit;
 let ornaments = []; 
 let photoMeshes = [];
 let hands, cameraPipe, rafId;
-let raycaster, mouse, handCursor;
+let raycaster, mouse, handCursor, cursorMesh;
 
 // DOM
 const overlay = document.getElementById('gesture-overlay');
@@ -61,42 +61,53 @@ function initThree() {
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    // 使用 Reinhard 映射，能更好处理高亮而不失真
     renderer.toneMapping = THREE.ReinhardToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMappingExposure = 1.2; // 稍微调亮整体
     container.appendChild(renderer.domElement);
 
-    // ✅ 辉光策略：阈值设为 1.0，只要物体亮度不超过 1.0 就绝对不发光
+    // ✅ 辉光配置：既要有光，又不能瞎眼
     const renderScene = new RenderPass(scene, camera);
     const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-    bloomPass.threshold = 1.0; // 关键：只有亮度 > 1.0 的物体才发光
-    bloomPass.strength = 1.2;  // 强度恢复，保证铃铛够亮
-    bloomPass.radius = 0.5;
+    bloomPass.threshold = 0.6; // 阈值降低一点，让照片的微光能透出来
+    bloomPass.strength = 0.8;  // 强度适中
+    bloomPass.radius = 0.3;
 
     composer = new EffectComposer(renderer);
     composer.addPass(renderScene);
     composer.addPass(bloomPass);
 
-    // OrbitControls (Mouse Only)
+    // OrbitControls
     controlsOrbit = new OrbitControls(camera, renderer.domElement);
     controlsOrbit.enableDamping = true;
     controlsOrbit.dampingFactor = 0.05;
     controlsOrbit.enablePan = false;
     controlsOrbit.enabled = false; 
 
-    // Raycaster
+    // Raycaster & Cursor
     raycaster = new THREE.Raycaster();
     mouse = new THREE.Vector2();
-    handCursor = new THREE.Vector2(); // 手势光标
+    handCursor = new THREE.Vector2();
+    
+    // ✅ 新增：手势光标 (一个小光点，方便瞄准)
+    const cursorGeo = new THREE.SphereGeometry(0.5, 16, 16);
+    const cursorMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.8 });
+    cursorMesh = new THREE.Mesh(cursorGeo, cursorMat);
+    cursorMesh.visible = false; // 只有识别到手时才显示
+    scene.add(cursorMesh);
+
     window.addEventListener('click', onDocumentClick);
 
     // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // 提高环境光，保证照片清晰
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); 
     scene.add(ambientLight);
     
     const dirLight = new THREE.DirectionalLight(0xfff5b6, 1.0);
     dirLight.position.set(20, 50, 20);
     scene.add(dirLight);
+    
+    const pointLight = new THREE.PointLight(CONFIG.colors.gold, 2, 100);
+    pointLight.position.set(0, 10, 10);
+    scene.add(pointLight);
 
     createParticles();
     window.addEventListener('resize', onWindowResize);
@@ -106,17 +117,18 @@ function createParticles() {
     const geometrySphere = new THREE.SphereGeometry(0.6, 16, 16);
     const geometryBox = new THREE.BoxGeometry(0.9, 0.9, 0.9);
     
-    // ✅ 粒子材质：自发光强度设为 3.0，远超阈值 1.0，所以会发光
+    // ✅ 粒子：高亮自发光，确保树上有“亮光点”
     const matGold = new THREE.MeshStandardMaterial({ 
         color: CONFIG.colors.gold, metalness: 0.9, roughness: 0.1, 
-        emissive: 0xaa6600, emissiveIntensity: 3.0 
+        emissive: 0xffaa00, emissiveIntensity: 2.0 
     });
     const matRed = new THREE.MeshStandardMaterial({ 
         color: CONFIG.colors.red, metalness: 0.6, roughness: 0.3,
-        emissive: 0xff0000, emissiveIntensity: 3.0 
+        emissive: 0xff0000, emissiveIntensity: 1.5 
     });
     const matGreen = new THREE.MeshStandardMaterial({ 
-        color: CONFIG.colors.green, metalness: 0.1, roughness: 0.9 
+        color: CONFIG.colors.green, metalness: 0.1, roughness: 0.9,
+        emissive: 0x004400, emissiveIntensity: 0.5 
     });
 
     for (let i = 0; i < CONFIG.particleCount; i++) {
@@ -165,15 +177,19 @@ function createPhotoMesh(texture, index, itemData) {
     const aspect = texture.image.width / texture.image.height;
     const geo = new THREE.PlaneGeometry(CONFIG.photoScale * aspect, CONFIG.photoScale);
     
-    // ✅ 照片材质：使用 Lambert 材质，不设置 emissive (自发光)，亮度受环境光控制，不会超过 1.0，所以不发光
-    const mat = new THREE.MeshLambertMaterial({ 
-        map: texture, side: THREE.DoubleSide, transparent: true, opacity: 1.0
+    // ✅ 照片材质：Standard 材质 + 微弱自发光 (emissive: 0.2)
+    // 这样照片既清晰，又带有一点点光感，不会死黑
+    const mat = new THREE.MeshStandardMaterial({ 
+        map: texture, side: THREE.DoubleSide, transparent: true, opacity: 1.0,
+        roughness: 0.4, metalness: 0.1,
+        emissive: 0xffffff, emissiveIntensity: 0.15 
     });
     const mesh = new THREE.Mesh(geo, mat);
     
+    // 布局优化：照片稍往外放一点，更容易被发现
     const theta = index * 1.5; 
     const y = ((index / 10) - 0.5) * 40; 
-    const r = 18 + Math.random() * 5; 
+    const r = 22 + Math.random() * 5; // 原来是 18，改大一点
 
     mesh.userData = {
         treePos: { x: Math.cos(theta)*r, y: y, z: Math.sin(theta)*r },
@@ -184,7 +200,8 @@ function createPhotoMesh(texture, index, itemData) {
     };
 
     mesh.position.set(mesh.userData.treePos.x, mesh.userData.treePos.y, mesh.userData.treePos.z);
-    mesh.lookAt(0,0,0);
+    mesh.lookAt(0,0,0); // 初始朝向中心
+    
     scene.add(mesh);
     ornaments.push(mesh);
     photoMeshes.push(mesh);
@@ -204,31 +221,52 @@ function transitionTo(newState, focusIndex = -1) {
 
         if (newState === 'TREE') {
             target = mesh.userData.treePos;
-            if(mesh.userData.isPhoto) mesh.lookAt(0,0,0);
+            // 回到树形时，照片重置朝向中心
+            if(mesh.userData.isPhoto) {
+                const dummyVec = new THREE.Vector3(0,0,0);
+                // 简单的 lookAt 不能在 tween 中平滑过渡旋转，这里只复位位置
+                // 旋转会在 loop 中动态处理（如果需要）
+                // 简单起见，我们只 Tween 位置
+                // mesh.lookAt(0,0,0); // 瞬间复位
+            }
         } else if (newState === 'SCATTER') {
             target = mesh.userData.scatterPos;
         } else if (newState === 'FOCUS') {
             if (photoMeshes.indexOf(mesh) === focusIndex) {
-                // 选中照片：飞到屏幕正中央
                 const camDir = new THREE.Vector3();
                 camera.getWorldDirection(camDir);
-                const dist = 12; // 距离稍微拉近一点
+                
+                // ✅ 手机/PC 适配逻辑
+                const isPortrait = window.innerHeight > window.innerWidth;
+                const dist = isPortrait ? 25 : 12; // 手机(竖屏)拉远距离，PC(横屏)拉近距离
+                
                 target = { 
                     x: camera.position.x + camDir.x * dist, 
                     y: camera.position.y + camDir.y * dist, 
                     z: camera.position.z + camDir.z * dist 
                 };
-                targetScale = new THREE.Vector3(2, 2, 2); 
+                
+                // 聚焦时，照片稍微放大
+                const zoomScale = isPortrait ? 1.5 : 2.5; // 手机上不用放太大，因为距离拉远了
+                targetScale = new THREE.Vector3(zoomScale, zoomScale, zoomScale); 
+                
                 mesh.lookAt(camera.position);
                 statusText.innerText = mesh.userData.desc || "查看照片";
             } else {
-                target = mesh.userData.scatterPos; // 其他照片散开
+                target = mesh.userData.scatterPos; 
             }
         }
 
         new TWEEN.Tween(mesh.position).to(target, 1500).easing(TWEEN.Easing.Exponential.InOut).start();
+        
         if(mesh.userData.isPhoto) {
             new TWEEN.Tween(mesh.scale).to(targetScale, 1000).easing(TWEEN.Easing.Back.Out).start();
+            // 如果是高亮状态，稍微增加一点发光，强调选中
+            if (photoMeshes.indexOf(mesh) === focusIndex) {
+               mesh.material.emissiveIntensity = 0.3;
+            } else {
+               mesh.material.emissiveIntensity = 0.15;
+            }
         }
     });
 }
@@ -239,12 +277,14 @@ function toggleInputMode() {
         STATE.inputMode = 'MOUSE';
         btnInputMode.innerText = "🖱️ 鼠标模式";
         statusText.innerText = "鼠标控制中...";
+        statusText.style.color = "#fff";
         gestureGuide.style.display = 'none';
         videoElement.classList.add('hidden'); 
         videoElement.style.opacity = 0;
         mouseControls.style.display = 'flex';
         controlsOrbit.enabled = true;
         camera.position.set(0, 20, 80);
+        cursorMesh.visible = false;
     } else {
         STATE.inputMode = 'GESTURE';
         btnInputMode.innerText = "🖐️ 手势模式";
@@ -285,63 +325,84 @@ function onResults(results) {
         STATE.handPresent = true;
         const landmarks = results.multiHandLandmarks[0];
         
-        // 1. 获取食指指尖 (Index Tip) 用于瞄准
+        // 1. 光标定位 (食指指尖)
         const indexTip = landmarks[8];
+        // 映射坐标：Mediapipe (0~1) -> NDC (-1~1) -> 光标 3D 位置
+        // 注意：Webcam 画面通常是镜像的，x 需要反转？CSS里 video 已经 scaleX(-1) 了
+        // 这里的坐标逻辑：x: 0(left) -> 1(right). 
         handCursor.x = (indexTip.x - 0.5) * 2;
-        handCursor.y = -(indexTip.y - 0.5) * 2; // Y轴反转
+        handCursor.y = -(indexTip.y - 0.5) * 2; 
 
-        // 2. 射线检测：看手有没有指着照片
+        // 更新光标小球位置 (投影到摄像机前方固定距离)
+        const cursorDist = 30; // 光标在相机前方30单位
+        const cursorVec = new THREE.Vector3(handCursor.x, handCursor.y, 0.5).unproject(camera);
+        const dir = cursorVec.sub(camera.position).normalize();
+        const cursorPos = camera.position.clone().add(dir.multiplyScalar(cursorDist));
+        cursorMesh.position.copy(cursorPos);
+        cursorMesh.visible = true;
+
+        // 2. 射线检测 (Hover & Select)
         raycaster.setFromCamera(handCursor, camera);
         const intersects = raycaster.intersectObjects(photoMeshes);
         
-        // 3. 捏合检测 (Pinch)
+        // Hover 效果 (悬停高亮)
+        if (intersects.length > 0) {
+            const target = intersects[0].object;
+            const idx = photoMeshes.indexOf(target);
+            if (STATE.hoveredPhotoIndex !== idx) {
+                // 恢复上一个
+                if (STATE.hoveredPhotoIndex !== -1 && photoMeshes[STATE.hoveredPhotoIndex]) {
+                    photoMeshes[STATE.hoveredPhotoIndex].material.emissive.setHex(0xffffff);
+                }
+                // 高亮当前
+                target.material.emissive.setHex(0xff00ff); // 悬停变紫红
+                STATE.hoveredPhotoIndex = idx;
+            }
+        } else {
+            if (STATE.hoveredPhotoIndex !== -1 && photoMeshes[STATE.hoveredPhotoIndex]) {
+                photoMeshes[STATE.hoveredPhotoIndex].material.emissive.setHex(0xffffff);
+                STATE.hoveredPhotoIndex = -1;
+            }
+        }
+
+        // 3. 捏合检测
         const thumbTip = landmarks[4];
         const pinchDist = Math.sqrt(Math.pow(thumbTip.x - indexTip.x, 2) + Math.pow(thumbTip.y - indexTip.y, 2));
-        const isPinching = pinchDist < 0.05;
+        const isPinching = pinchDist < 0.08; // 放宽判定，稍微捏一下就算
 
-        // 4. 握拳检测 (Fist)
+        // 4. 握拳检测
         const wrist = landmarks[0];
         const middleTip = landmarks[12];
         const fistDist = Math.sqrt(Math.pow(middleTip.x - wrist.x, 2) + Math.pow(middleTip.y - wrist.y, 2));
 
-        // --- 逻辑判断 ---
+        // --- 触发逻辑 ---
         if (isPinching) {
             if (intersects.length > 0) {
-                // ✅ 精准聚焦：指哪张看哪张
-                statusText.innerText = "👌 FOCUS (锁定照片)";
+                statusText.innerText = "👌 锁定照片";
                 statusText.style.color = "#0f0";
                 const targetMesh = intersects[0].object;
                 const idx = photoMeshes.indexOf(targetMesh);
-                
-                // 只有当目标改变时才触发
-                if (STATE.focusedPhotoIndex !== idx) {
-                    transitionTo('FOCUS', idx);
-                }
-            } else {
-                // 捏合但没指着照片 -> 保持当前状态或无操作
+                if (STATE.focusedPhotoIndex !== idx) transitionTo('FOCUS', idx);
             }
         } else if (fistDist < 0.25) {
-            statusText.innerText = "✊ TREE (聚树)";
+            statusText.innerText = "✊ 聚树";
             transitionTo('TREE');
         } else {
-            // 张开手
-            // 如果之前是 FOCUS 状态，手张开不应该立刻散开，除非捏合释放？
-            // 逻辑优化：如果正在看照片，只有指向空白处捏合/或者特殊手势才退出？
-            // 简单点：张手就是散开（浏览模式）
-            statusText.innerText = "🖐 SCATTER (散开)";
-            if (STATE.mode !== 'FOCUS') transitionTo('SCATTER'); 
-            // 如果是 FOCUS，保持 FOCUS，直到用户做“散开”手势？
-            // 或者：只要不捏合，就允许退出 FOCUS？
-            // 为了体验流畅，我们设定：如果正在 FOCUS，只有当手移开中心区域或者张开手一段时间才退？
-            // 这里为了简单直观：张手 = 散开。如果想退出查看，就张手。
-            if (STATE.mode === 'FOCUS' && !intersects.length) transitionTo('SCATTER');
+            statusText.innerText = "🖐 浏览 (移动手指瞄准)";
+            // 只有当前不在 FOCUS 状态，或者指向空白处时才允许 SCATTER
+            if (STATE.mode === 'FOCUS' && intersects.length === 0) {
+                 // 稍微延迟防误触？直接散开也行
+                 transitionTo('SCATTER');
+            } else if (STATE.mode !== 'FOCUS') {
+                 transitionTo('SCATTER');
+            }
         }
 
-        // 5. 视角旋转 (Hand Moving)
-        // ✅ 修复：在 FOCUS 模式下，禁用相机旋转，背景也不动，绝对静止
+        // 5. 视角旋转 (FOCUS 模式下完全静止)
         if (STATE.mode === 'FOCUS') {
-            // Do nothing to camera rotation
+            // 静止
         } else {
+            // 手势控制旋转
             const handX = (landmarks[9].x - 0.5) * 2; 
             const handY = (landmarks[9].y - 0.5) * 2;
             STATE.rotationTarget.x = handX * 2; 
@@ -350,7 +411,8 @@ function onResults(results) {
 
     } else {
         STATE.handPresent = false;
-        statusText.innerText = "Waiting for hand...";
+        cursorMesh.visible = false;
+        statusText.innerText = "请举起手...";
     }
 }
 
@@ -372,10 +434,8 @@ function animate(time) {
     if (STATE.inputMode === 'MOUSE') {
         controlsOrbit.update();
     } else {
-        // ✅ 手势模式相机逻辑：
         if (STATE.mode === 'FOCUS') {
-            // 绝对静止：锁定相机位置，不做任何 lerp，防止照片乱动
-            // 只有 TWEEN 在负责把照片移到相机面前，相机本身不动
+            // 绝对静止，仅 TWEEN 负责照片移动
         } else if (STATE.mode === 'SCATTER') {
             const radius = 80;
             const targetTheta = STATE.rotationTarget.x;
@@ -386,7 +446,7 @@ function animate(time) {
             camera.position.y += (-targetPhi * 20 - camera.position.y + 10) * 0.05;
             camera.lookAt(0, 0, 0);
         } else {
-             // TREE
+             // Tree Auto Rotate
              const radius = 80;
              const timeAngle = time * 0.0002;
              camera.position.x = Math.sin(timeAngle) * radius;
@@ -396,13 +456,13 @@ function animate(time) {
         }
     }
 
-    // 聚焦照片始终看向相机
+    // Billboard effect for focus
     if (STATE.mode === 'FOCUS' && STATE.focusedPhotoIndex > -1) {
         const p = photoMeshes[STATE.focusedPhotoIndex];
         if(p) p.lookAt(camera.position);
     }
 
-    // ✅ 粒子动画：在 FOCUS 模式下也停止自旋，保持画面纯净
+    // Particles rotate
     if (STATE.mode !== 'TREE' && STATE.mode !== 'FOCUS') {
         ornaments.forEach((mesh) => {
             mesh.rotation.x += 0.01; mesh.rotation.y += 0.01;
@@ -446,7 +506,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (openBtn) openBtn.addEventListener('click', startGestureSystem);
     if (closeBtn) closeBtn.addEventListener('click', stopGestureSystem);
     
-    // 绑定切换按钮
     if (btnInputMode) {
         btnInputMode.removeEventListener('click', toggleInputMode);
         btnInputMode.addEventListener('click', toggleInputMode);
