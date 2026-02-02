@@ -58,25 +58,36 @@ body.bg-fading::after{ opacity: 1; }
 .divider{ height: 1px; background: rgba(0,0,0,0.12); }
 
 /* =========================
-   4. 滚动容器 (Snap) - 阻尼核心区
+   4. 滚动容器 (Snap)
    ========================= */
 .snap{ 
   height: 100vh; 
   overflow-y: auto; 
   padding-top: var(--header-h); 
-  scroll-snap-stop: always; 
   scroll-padding-top: var(--header-h); 
   
-  /* PC端默认：接近吸附 */
+  /* 基础吸附设置 */
   scroll-snap-type: y proximity; 
   
-  /* 手机端默认阻力设置 (后续在 media query 中覆盖) */
-  overscroll-behavior: none; 
+  /* 手机端防穿透 */
+  overscroll-behavior-y: none;
 }
 
 /* 弹窗打开时锁死一级页面 */
 body.modal-open #snap{ overflow: hidden !important; }
-.section{ scroll-snap-align: start; min-height: calc(100vh - var(--header-h)); padding: 28px 16px; display: flex; align-items: center; }
+
+/* ✅ 核心修复：将强制停止 (stop always) 加在子元素上 */
+.section{ 
+  scroll-snap-align: start; 
+  /* 关键属性：强制每次滚动只停在下一页，禁止飞跃 */
+  scroll-snap-stop: always; 
+  
+  min-height: calc(100vh - var(--header-h)); 
+  padding: 28px 16px; 
+  display: flex; 
+  align-items: center; 
+}
+
 .container{ max-width: 1020px; margin: 0 auto; width: 100%; }
 
 /* =========================
@@ -126,13 +137,13 @@ body.hero-anim .gpt-mark .strip {
 .tile-desc{ font-size: 13px; color:#666; }
 
 /* =========================
-   7. 笔谈板块 (Notes) - 阻尼调优
+   7. 笔谈板块 (Notes)
    ========================= */
 .tri{ margin-top: 18px; display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 14px; align-items: center; }
 .side{ background: rgba(255,255,255,0.9); border: 1px solid var(--border); border-radius: 16px; padding: 16px 14px; box-shadow: 0 10px 24px rgba(0,0,0,0.08); min-height: 280px; }
 .side-title{ font-weight: 800; margin-bottom: 10px; }
 
-/* 核心：笔谈区滚动容器 */
+/* 核心：笔谈区适配 */
 .center-scroll{ 
   background: rgba(255,255,255,0.95); 
   border: 1px solid var(--border); 
@@ -142,10 +153,10 @@ body.hero-anim .gpt-mark .strip {
   max-height: 62vh; 
   overflow: auto; 
   
-  /* ✅ 阻尼优化 2：内部保持丝滑惯性，适合阅读 */
+  /* ✅ 保持内容区丝滑 */
   -webkit-overflow-scrolling: touch; 
   
-  /* ✅ 阻尼优化 3：滚动触底时“包含”行为，防止触发外层翻页 */
+  /* ✅ 滚动边界锁：内容滑到底时，不触发外层翻页 */
   overscroll-behavior: contain; 
   position: relative; 
 }
@@ -201,20 +212,26 @@ body.hero-anim .gpt-mark .strip {
 @keyframes splashFadeOut { to { opacity: 0; visibility: hidden; } }
 
 /* =========================
-   10. 响应式 (手机端阻尼增强)
+   10. 响应式适配
    ========================= */
 @media (max-width: 720px){
-  /* ✅ 阻尼优化 1：强制吸附 + 禁用页面级惯性 */
-  /* 这会让翻页感觉更“重”，手指一停页面就停，不会滑过头 */
+  /* ✅ 移动端专属阻尼增强 */
   .snap { 
+    /* mandatory 更加强制，必须吸附 */
     scroll-snap-type: y mandatory; 
-    -webkit-overflow-scrolling: auto; /* 禁用惯性滚动 */
+    
+    /* 禁用容器级别的惯性，让翻页更“重”，手指一停页面就停 */
+    /* 注意：内容区 .center-scroll 依然保留惯性，体验不冲突 */
+    -webkit-overflow-scrolling: auto; 
   }
   
   .nav{ display:none; }
   .grid2{ grid-template-columns: 1fr; }
   .tri{ grid-template-columns: 1fr; height: auto; }
+  
+  /* 笔谈区在手机上限制高度，防止占满全屏导致无法划走 */
   .center-scroll{ max-height: 56vh; }
+  
   .gallery{ grid-template-columns: 1fr; }
   .intro-hello { font-size: 5rem; letter-spacing: -2px; }
   .intro-name { font-size: 1.5rem; }
