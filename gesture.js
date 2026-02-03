@@ -22,10 +22,10 @@ const CONFIG = {
         pcDist: 20, 
         scale: 2.0      
     },
-    // ✅ 新增：手势防抖配置
+    // ✅ 速度优化：微调防抖参数
     gesture: {
-        confirmFrames: 12, // 需要连续保持多少帧才触发（约0.4秒）
-        cooldown: 1000     // 触发后冷却时间（毫秒）
+        confirmFrames: 4,   // 只需要保持 4 帧 (极快，但能滤除杂波)
+        cooldown: 400       // 冷却 0.4 秒，保证连贯性
     }
 };
 
@@ -38,7 +38,7 @@ const STATE = {
     rotationTarget: { x: 0, y: 0 },
     focusedPhotoIndex: -1,
     lastFocusedIndices: [],
-    // 防抖状态变量
+    // 防抖状态
     lastGestureName: null,
     gestureFrameCount: 0,
     lastTriggerTime: 0
@@ -184,10 +184,9 @@ function createPhotoMesh(texture, index, itemData) {
     });
     const mesh = new THREE.Mesh(geo, mat);
     
-    // 布局：尽量藏在树内部，不要太靠外
+    // 布局优化：藏在树里
     const theta = index * 1.5; 
     const y = ((index / 10) - 0.5) * 40; 
-    // r 稍微减小一点，确保在树叶里面
     const r = 15 + Math.random() * 8; 
 
     mesh.userData = {
@@ -202,7 +201,7 @@ function createPhotoMesh(texture, index, itemData) {
     mesh.position.set(mesh.userData.treePos.x, mesh.userData.treePos.y, mesh.userData.treePos.z);
     mesh.lookAt(0,0,0);
     
-    // ✅ 初始状态：完全隐藏
+    // 初始完全隐藏
     mesh.scale.set(0, 0, 0);
 
     scene.add(mesh);
@@ -234,13 +233,10 @@ function findBestPhotoToFocus() {
     return best.index;
 }
 
-// --- TRANSITIONS ---
 function transitionTo(newState, focusIndex = -1) {
     if (STATE.mode === newState && newState !== 'FOCUS') return;
     STATE.mode = newState;
     STATE.focusedPhotoIndex = focusIndex;
-    
-    // 更新最后触发时间
     STATE.lastTriggerTime = Date.now();
 
     new TWEEN.Group().removeAll();
@@ -252,14 +248,16 @@ function transitionTo(newState, focusIndex = -1) {
         if (newState === 'TREE') {
             target = mesh.userData.treePos;
             if(mesh.userData.isPhoto) {
-                // ✅ 树模式：所有照片强制缩小到 0，完全隐藏
-                // 这样就不会有东西乱飘了
-                targetScale = new THREE.Vector3(0.01, 0.01, 0.01); 
-                mesh.lookAt(0, 0, 0);
+                mesh.lookAt(0, 0, 0); 
+                // 若隐若现逻辑
+                if (Math.random() > 0.85) {
+                    targetScale = new THREE.Vector3(0.8, 0.8, 0.8);
+                } else {
+                    targetScale = new THREE.Vector3(0.01, 0.01, 0.01);
+                }
             }
         } else if (newState === 'SCATTER') {
             target = mesh.userData.scatterPos;
-            // 散开模式：照片恢复正常大小
             if (mesh.userData.isPhoto) targetScale = new THREE.Vector3(1, 1, 1);
         } else if (newState === 'FOCUS') {
             if (photoMeshes.indexOf(mesh) === focusIndex) {
@@ -339,7 +337,7 @@ function onDocumentClick(event) {
     }
 }
 
-// --- MEDIAPIPE & GESTURE STABILIZER ---
+// --- MEDIAPIPE ---
 function detectGesture(landmarks) {
     const wrist = landmarks[0];
     const middleTip = landmarks[12];
@@ -348,10 +346,9 @@ function detectGesture(landmarks) {
     const indexTip = landmarks[8];
     const pinchDist = Math.sqrt(Math.pow(thumbTip.x - indexTip.x, 2) + Math.pow(thumbTip.y - indexTip.y, 2));
 
-    // 简单判定逻辑
-    if (pinchDist < 0.05) return 'PINCH'; // 捏合
-    if (distance < 0.25) return 'FIST';   // 握拳
-    return 'OPEN';                        // 张开
+    if (pinchDist < 0.05) return 'PINCH'; 
+    if (distance < 0.25) return 'FIST';   
+    return 'OPEN';                        
 }
 
 function onResults(results) {
@@ -363,34 +360,28 @@ function onResults(results) {
         const landmarks = results.multiHandLandmarks[0];
         const rawGesture = detectGesture(landmarks);
 
-        // ✅ 防抖逻辑核心
-        // 1. 如果当前帧手势与上一帧相同，计数器+1
+        // ✅ 防抖逻辑：4帧确认 (极速)
         if (rawGesture === STATE.lastGestureName) {
             STATE.gestureFrameCount++;
         } else {
-            // 2. 如果不同，重置计数器
             STATE.gestureFrameCount = 0;
             STATE.lastGestureName = rawGesture;
         }
 
-        // 3. 只有连续保持了一定帧数 (CONFIG.gesture.confirmFrames)，且冷却时间已过，才认为手势有效
         const isStable = STATE.gestureFrameCount > CONFIG.gesture.confirmFrames;
         const isCooldownOver = (Date.now() - STATE.lastTriggerTime) > CONFIG.gesture.cooldown;
 
         if (isStable) {
-            // 执行逻辑
             if (rawGesture === 'PINCH') {
                 statusText.innerText = "👌 锁定 (捏合)";
                 statusText.style.color = "#0f0";
                 
-                // 捏合时检查射线
                 const indexTip = landmarks[8];
                 const handCursor = { x: (indexTip.x - 0.5) * 2, y: -(indexTip.y - 0.5) * 2 };
                 raycaster.setFromCamera(handCursor, camera);
                 const intersects = raycaster.intersectObjects(photoMeshes);
 
                 if (intersects.length > 0) {
-                    // 指向照片时：允许快速触发聚焦，不受冷却限制太死
                     const targetMesh = intersects[0].object;
                     const idx = photoMeshes.indexOf(targetMesh);
                     if (STATE.focusedPhotoIndex !== idx) transitionTo('FOCUS', idx);
@@ -405,14 +396,12 @@ function onResults(results) {
                 if (STATE.mode !== 'SCATTER' && STATE.mode !== 'FOCUS' && isCooldownOver) {
                      transitionTo('SCATTER');
                 }
-                // 特殊处理：如果正在 FOCUS 且没指着任何东西，允许退出
                 if (STATE.mode === 'FOCUS' && isCooldownOver) {
                      transitionTo('SCATTER');
                 }
             }
         }
 
-        // 旋转控制 (任何时候都生效，只要手在)
         if (STATE.mode !== 'FOCUS') {
             const handX = (landmarks[9].x - 0.5) * 2; 
             const handY = (landmarks[9].y - 0.5) * 2;
@@ -422,7 +411,7 @@ function onResults(results) {
 
     } else {
         STATE.handPresent = false;
-        STATE.gestureFrameCount = 0; // 手移开，重置
+        STATE.gestureFrameCount = 0;
         statusText.innerText = "请举起手...";
     }
 }
