@@ -21,11 +21,8 @@ const CONFIG = {
         mobileDist: 22, 
         pcDist: 20, 
         scale: 2.0      
-    },
-    gesture: {
-        confirmFrames: 8,   // ✅ 8帧：折中方案，既稳又快
-        cooldown: 500       // 0.5秒冷却，防止连击
     }
+    // ⚠️ 已移除所有防抖配置，回归原始逻辑
 };
 
 // --- STATE ---
@@ -36,10 +33,7 @@ const STATE = {
     handPresent: false,
     rotationTarget: { x: 0, y: 0 },
     focusedPhotoIndex: -1,
-    lastFocusedIndices: [],
-    lastGestureName: null,
-    gestureFrameCount: 0,
-    lastTriggerTime: 0
+    lastFocusedIndices: []
 };
 
 // --- GLOBALS ---
@@ -68,8 +62,7 @@ function initThree() {
     scene.fog = new THREE.FogExp2(CONFIG.colors.bg, 0.015);
 
     camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    // ✅ 摄像机位置微调：稍微拉远一点点，视角更广
-    camera.position.set(0, 10, 85);
+    camera.position.set(0, 10, 80);
 
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -130,8 +123,8 @@ function createParticles() {
         const y = (i / CONFIG.particleCount) * CONFIG.treeHeight - (CONFIG.treeHeight/2);
         const r = (1 - (y + CONFIG.treeHeight/2) / CONFIG.treeHeight) * CONFIG.treeRadius + Math.random() * 2;
         
-        // ✅ 修复：树整体上移 10 个单位，避免底部被切掉
-        const treePos = { x: Math.cos(theta) * r, y: y + 10, z: Math.sin(theta) * r };
+        // ✅ 修复：树的位置整体上移 12，解决底部看不到的问题
+        const treePos = { x: Math.cos(theta) * r, y: y + 12, z: Math.sin(theta) * r };
         const scatterPos = { x: (Math.random() - 0.5) * CONFIG.scatterRadius * 2, y: (Math.random() - 0.5) * CONFIG.scatterRadius * 2, z: (Math.random() - 0.5) * CONFIG.scatterRadius * 2 };
 
         mesh.userData = { treePos, scatterPos, originalScale: mesh.scale.clone(), isPhoto: false };
@@ -175,13 +168,13 @@ function createPhotoMesh(texture, index, itemData) {
     const r = 15 + Math.random() * 8; 
 
     // ✅ 修复：照片跟随树整体上移
-    const treePos = { x: Math.cos(theta)*r, y: y + 10, z: Math.sin(theta)*r };
+    const treePos = { x: Math.cos(theta)*r, y: y + 12, z: Math.sin(theta)*r };
     
-    // ✅ 修复：限制散开模式的 Y 轴范围 (-25 到 25)，防止飞到天上
+    // ✅ 修复：散开范围 Y 轴限制在 30 以内，防止飞到天上
     const scatterPos = { 
         x: (Math.random()-0.5)*70, 
-        y: (Math.random()-0.5)*50, // 限制高度
-        z: (Math.random()-0.5)*50 + 20 // 稍微靠前一点
+        y: (Math.random()-0.5)*30, 
+        z: (Math.random()-0.5)*50 + 10 
     };
 
     mesh.userData = {
@@ -221,12 +214,11 @@ function findBestPhotoToFocus() {
     return best.index;
 }
 
-// --- 核心逻辑修复：TRANSITIONS ---
+// --- 核心修复区：转场动画逻辑 ---
 function transitionTo(newState, focusIndex = -1) {
     if (STATE.mode === newState && newState !== 'FOCUS') return;
     STATE.mode = newState;
     STATE.focusedPhotoIndex = focusIndex;
-    STATE.lastTriggerTime = Date.now();
 
     new TWEEN.Group().removeAll();
 
@@ -235,7 +227,6 @@ function transitionTo(newState, focusIndex = -1) {
         let targetScale = mesh.userData.originalScale;
 
         if (newState === 'TREE') {
-            // 回到树模式
             target = mesh.userData.treePos;
             if(mesh.userData.isPhoto) {
                 mesh.lookAt(0, 0, 0);
@@ -244,13 +235,11 @@ function transitionTo(newState, focusIndex = -1) {
                 else targetScale = new THREE.Vector3(0.01, 0.01, 0.01);
             }
         } else if (newState === 'SCATTER') {
-            // 散开模式
             target = mesh.userData.scatterPos;
             if (mesh.userData.isPhoto) targetScale = new THREE.Vector3(1, 1, 1);
         } else if (newState === 'FOCUS') {
-            // 聚焦模式
             if (photoMeshes.indexOf(mesh) === focusIndex) {
-                // 1. 选中的照片：计算位置并放大
+                // 1. 选中的照片：正常飞过来放大
                 const camDir = new THREE.Vector3();
                 camera.getWorldDirection(camDir);
                 const screenAspect = window.innerWidth / window.innerHeight;
@@ -269,9 +258,8 @@ function transitionTo(newState, focusIndex = -1) {
                 mesh.lookAt(camera.position);
                 statusText.innerText = mesh.userData.desc || "查看照片";
             } else {
-                // 2. ✅ 没选中的照片：强制隐藏！
-                // 之前这里设为 scatterPos 且 scale=1，导致所有照片突然闪现
-                // 现在改成：未选中照片去 scatterPos，但缩放为 0 (隐藏)
+                // 2. ✅ 修复“挂满再放大”Bug：没选中的照片，直接去散开位置，并且 缩放为 0
+                // 这样它们就不会在背景里乱晃了
                 target = mesh.userData.scatterPos;
                 if (mesh.userData.isPhoto) {
                     targetScale = new THREE.Vector3(0, 0, 0); 
@@ -326,19 +314,7 @@ function onDocumentClick(event) {
     }
 }
 
-function detectGesture(landmarks) {
-    const wrist = landmarks[0];
-    const middleTip = landmarks[12];
-    const distance = Math.sqrt(Math.pow(middleTip.x - wrist.x, 2) + Math.pow(middleTip.y - wrist.y, 2));
-    const thumbTip = landmarks[4];
-    const indexTip = landmarks[8];
-    const pinchDist = Math.sqrt(Math.pow(thumbTip.x - indexTip.x, 2) + Math.pow(thumbTip.y - indexTip.y, 2));
-
-    if (pinchDist < 0.05) return 'PINCH'; 
-    if (distance < 0.25) return 'FIST';   
-    return 'OPEN';                        
-}
-
+// --- MEDIAPIPE (回滚到最原始的判定) ---
 function onResults(results) {
     if(!STATE.active || STATE.inputMode === 'MOUSE') return;
     loader.style.display = 'none';
@@ -346,50 +322,47 @@ function onResults(results) {
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         STATE.handPresent = true;
         const landmarks = results.multiHandLandmarks[0];
-        const rawGesture = detectGesture(landmarks);
+        
+        const wrist = landmarks[0];
+        const middleTip = landmarks[12];
+        const distance = Math.sqrt(Math.pow(middleTip.x - wrist.x, 2) + Math.pow(middleTip.y - wrist.y, 2));
+        const thumbTip = landmarks[4];
+        const indexTip = landmarks[8];
+        const pinchDist = Math.sqrt(Math.pow(thumbTip.x - indexTip.x, 2) + Math.pow(thumbTip.y - indexTip.y, 2));
 
-        if (rawGesture === STATE.lastGestureName) {
-            STATE.gestureFrameCount++;
+        // ✅ 无防抖，直接响应，最快
+        if (pinchDist < 0.05) {
+            // 捏合逻辑
+            statusText.innerText = "👌 锁定 (捏合)";
+            statusText.style.color = "#0f0";
+            
+            // 检测是否指着照片
+            const handCursor = { x: (indexTip.x - 0.5) * 2, y: -(indexTip.y - 0.5) * 2 };
+            raycaster.setFromCamera(handCursor, camera);
+            const intersects = raycaster.intersectObjects(photoMeshes);
+
+            if (intersects.length > 0) {
+                // 指向了照片，聚焦它
+                const targetMesh = intersects[0].object;
+                const idx = photoMeshes.indexOf(targetMesh);
+                if (STATE.focusedPhotoIndex !== idx) transitionTo('FOCUS', idx);
+            } else {
+                // 没指到照片，如果是 TREE 模式，可以随机进一个？或者保持
+                // 如果您希望必须“散开”后才能选，就保持现状
+                if (STATE.mode !== 'FOCUS' && STATE.mode !== 'TREE') {
+                    const bestIdx = findBestPhotoToFocus();
+                    if (bestIdx !== -1) transitionTo('FOCUS', bestIdx);
+                }
+            }
+        } else if (distance < 0.25) {
+            statusText.innerText = "✊ 聚树 (握拳)";
+            statusText.style.color = "#d4af37";
+            if (STATE.mode !== 'TREE') transitionTo('TREE');
         } else {
-            STATE.gestureFrameCount = 0;
-            STATE.lastGestureName = rawGesture;
-        }
-
-        const isStable = STATE.gestureFrameCount > CONFIG.gesture.confirmFrames;
-        const isCooldownOver = (Date.now() - STATE.lastTriggerTime) > CONFIG.gesture.cooldown;
-
-        if (isStable) {
-            if (rawGesture === 'PINCH') {
-                // ✅ 优化：如果是 TREE 模式，捏合无效，提示先张开
-                if (STATE.mode === 'TREE') {
-                    statusText.innerText = "ℹ️ 请先张开手 (OPEN)";
-                    statusText.style.color = "#aaa";
-                } else {
-                    statusText.innerText = "👌 锁定 (捏合)";
-                    statusText.style.color = "#0f0";
-                    const indexTip = landmarks[8];
-                    const handCursor = { x: (indexTip.x - 0.5) * 2, y: -(indexTip.y - 0.5) * 2 };
-                    raycaster.setFromCamera(handCursor, camera);
-                    const intersects = raycaster.intersectObjects(photoMeshes);
-                    if (intersects.length > 0) {
-                        const targetMesh = intersects[0].object;
-                        const idx = photoMeshes.indexOf(targetMesh);
-                        if (STATE.focusedPhotoIndex !== idx) transitionTo('FOCUS', idx);
-                    } 
-                }
-            } else if (rawGesture === 'FIST') {
-                statusText.innerText = "✊ 聚树 (握拳)";
-                statusText.style.color = "#d4af37";
-                if (STATE.mode !== 'TREE' && isCooldownOver) transitionTo('TREE');
-            } else { // OPEN
-                statusText.innerText = "🖐 浏览 (张手)";
-                statusText.style.color = "#fff";
-                if (STATE.mode !== 'SCATTER' && STATE.mode !== 'FOCUS' && isCooldownOver) {
-                     transitionTo('SCATTER');
-                }
-                if (STATE.mode === 'FOCUS' && isCooldownOver) {
-                     transitionTo('SCATTER');
-                }
+            statusText.innerText = "🖐 浏览 (张手)";
+            statusText.style.color = "#fff";
+            if (STATE.mode !== 'SCATTER' && STATE.mode !== 'FOCUS') {
+                 transitionTo('SCATTER');
             }
         }
 
@@ -399,9 +372,9 @@ function onResults(results) {
             STATE.rotationTarget.x = handX * 2; 
             STATE.rotationTarget.y = handY * 2;
         }
+
     } else {
         STATE.handPresent = false;
-        STATE.gestureFrameCount = 0;
         statusText.innerText = "请举起手...";
     }
 }
