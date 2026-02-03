@@ -17,10 +17,9 @@ const CONFIG = {
     treeRadius: 25,
     scatterRadius: 80,
     photoScale: 6,
-    // 聚焦配置
     focus: {
         mobileDist: 22, 
-        pcDist: 20,     // ✅ PC端拉近距离 (大一号)
+        pcDist: 20, 
         scale: 2.0      
     }
 };
@@ -70,7 +69,6 @@ function initThree() {
     renderer.toneMapping = THREE.NoToneMapping; 
     container.appendChild(renderer.domElement);
 
-    // 辉光 (只对铃铛生效)
     const renderScene = new RenderPass(scene, camera);
     const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
     bloomPass.threshold = 0.95; 
@@ -82,6 +80,11 @@ function initThree() {
     composer.addPass(bloomPass);
 
     controlsOrbit = new OrbitControls(camera, renderer.domElement);
+    // 手机端阻尼增强
+    controlsOrbit.enableDamping = true;
+    controlsOrbit.dampingFactor = 0.1; // 刹车更灵
+    controlsOrbit.rotateSpeed = 0.4;   // 转动更稳
+    controlsOrbit.enablePan = false;
     controlsOrbit.enabled = false; 
 
     raycaster = new THREE.Raycaster();
@@ -164,7 +167,6 @@ function createPhotoMesh(texture, index, itemData) {
     const aspect = texture.image.width / texture.image.height;
     const geo = new THREE.PlaneGeometry(CONFIG.photoScale * aspect, CONFIG.photoScale);
     
-    // ✅ 颜色微调：0xd9d9d9 (降低5%亮度，更有质感)
     const mat = new THREE.MeshBasicMaterial({ 
         map: texture, 
         side: THREE.DoubleSide, 
@@ -174,6 +176,7 @@ function createPhotoMesh(texture, index, itemData) {
     });
     const mesh = new THREE.Mesh(geo, mat);
     
+    // 布局优化：照片在树上的位置
     const theta = index * 1.5; 
     const y = ((index / 10) - 0.5) * 40; 
     const r = 25 + Math.random() * 5; 
@@ -189,6 +192,10 @@ function createPhotoMesh(texture, index, itemData) {
 
     mesh.position.set(mesh.userData.treePos.x, mesh.userData.treePos.y, mesh.userData.treePos.z);
     mesh.lookAt(0,0,0);
+    
+    // 初始状态设为极小（防止刚加载时吓人）
+    mesh.scale.set(0.01, 0.01, 0.01);
+
     scene.add(mesh);
     ornaments.push(mesh);
     photoMeshes.push(mesh);
@@ -218,6 +225,7 @@ function findBestPhotoToFocus() {
     return best.index;
 }
 
+// --- 核心状态切换 ---
 function transitionTo(newState, focusIndex = -1) {
     if (STATE.mode === newState && newState !== 'FOCUS') return;
     STATE.mode = newState;
@@ -227,13 +235,30 @@ function transitionTo(newState, focusIndex = -1) {
 
     ornaments.forEach(mesh => {
         let target;
-        let targetScale = mesh.userData.originalScale;
+        let targetScale = mesh.userData.originalScale; // 默认缩放
 
         if (newState === 'TREE') {
             target = mesh.userData.treePos;
-            if(mesh.userData.isPhoto) mesh.lookAt(0,0,0);
+            
+            if(mesh.userData.isPhoto) {
+                // ✅ 捉迷藏逻辑 (Hide & Seek)
+                // 1. 让照片全部朝向中心，像装饰品一样
+                mesh.lookAt(0, 0, 0); 
+                
+                // 2. 随机显隐：只有 15% 的照片会显示，其他的隐藏
+                // 这里的 Math.random() 会在每次切换回 TREE 时重新计算，实现动态效果
+                if (Math.random() > 0.85) {
+                    // 若隐若现：缩放到 0.8 倍 (像小卡片)
+                    targetScale = new THREE.Vector3(0.8, 0.8, 0.8);
+                } else {
+                    // 完美隐藏：缩放到 0.01 (几乎看不见，但还在)
+                    targetScale = new THREE.Vector3(0.01, 0.01, 0.01);
+                }
+            }
         } else if (newState === 'SCATTER') {
             target = mesh.userData.scatterPos;
+            // 散开时，照片恢复原大小
+            if (mesh.userData.isPhoto) targetScale = new THREE.Vector3(1, 1, 1);
         } else if (newState === 'FOCUS') {
             if (photoMeshes.indexOf(mesh) === focusIndex) {
                 const camDir = new THREE.Vector3();
@@ -242,17 +267,12 @@ function transitionTo(newState, focusIndex = -1) {
                 const screenAspect = window.innerWidth / window.innerHeight;
                 const photoAspect = mesh.userData.aspect;
                 
-                // 默认 PC 距离
                 let dist = CONFIG.focus.pcDist; 
-
                 if (screenAspect < photoAspect) {
-                    // 手机看横图，距离拉远
                     dist = CONFIG.focus.mobileDist * (photoAspect / screenAspect) * 0.6; 
                 } else if (screenAspect < 1.0) {
-                    // 手机看竖图
                     dist = CONFIG.focus.mobileDist;
                 }
-
                 dist = Math.max(15, Math.min(dist, 60));
 
                 target = { 
@@ -263,15 +283,17 @@ function transitionTo(newState, focusIndex = -1) {
                 
                 targetScale = new THREE.Vector3(CONFIG.focus.scale, CONFIG.focus.scale, CONFIG.focus.scale);
                 mesh.lookAt(camera.position);
-                
                 statusText.innerText = mesh.userData.desc || "查看照片";
             } else {
                 target = mesh.userData.scatterPos;
+                // 聚焦时，其他照片恢复原大小并在背景漂浮
+                if (mesh.userData.isPhoto) targetScale = new THREE.Vector3(1, 1, 1);
             }
         }
 
         new TWEEN.Tween(mesh.position).to(target, 1500).easing(TWEEN.Easing.Exponential.InOut).start();
         
+        // 专门控制照片缩放的动画
         if(mesh.userData.isPhoto) {
             new TWEEN.Tween(mesh.scale).to(targetScale, 1000).easing(TWEEN.Easing.Back.Out).start();
         }
