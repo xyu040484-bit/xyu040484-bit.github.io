@@ -22,10 +22,9 @@ const CONFIG = {
         pcDist: 20, 
         scale: 2.0      
     },
-    // ✅ 速度优化：微调防抖参数
     gesture: {
-        confirmFrames: 4,   // 只需要保持 4 帧 (极快，但能滤除杂波)
-        cooldown: 400       // 冷却 0.4 秒，保证连贯性
+        confirmFrames: 8,   // ✅ 8帧：折中方案，既稳又快
+        cooldown: 500       // 0.5秒冷却，防止连击
     }
 };
 
@@ -38,7 +37,6 @@ const STATE = {
     rotationTarget: { x: 0, y: 0 },
     focusedPhotoIndex: -1,
     lastFocusedIndices: [],
-    // 防抖状态
     lastGestureName: null,
     gestureFrameCount: 0,
     lastTriggerTime: 0
@@ -70,7 +68,8 @@ function initThree() {
     scene.fog = new THREE.FogExp2(CONFIG.colors.bg, 0.015);
 
     camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 10, 80);
+    // ✅ 摄像机位置微调：稍微拉远一点点，视角更广
+    camera.position.set(0, 10, 85);
 
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -117,18 +116,9 @@ function createParticles() {
     const geometrySphere = new THREE.SphereGeometry(0.6, 16, 16);
     const geometryBox = new THREE.BoxGeometry(0.9, 0.9, 0.9);
     
-    const matGold = new THREE.MeshStandardMaterial({ 
-        color: CONFIG.colors.gold, metalness: 0.9, roughness: 0.1, 
-        emissive: 0xffaa00, emissiveIntensity: 4.0 
-    });
-    const matRed = new THREE.MeshStandardMaterial({ 
-        color: CONFIG.colors.red, metalness: 0.6, roughness: 0.3,
-        emissive: 0xff0000, emissiveIntensity: 3.0 
-    });
-    const matGreen = new THREE.MeshStandardMaterial({ 
-        color: CONFIG.colors.green, metalness: 0.1, roughness: 0.9,
-        emissive: 0x004400, emissiveIntensity: 1.0 
-    });
+    const matGold = new THREE.MeshStandardMaterial({ color: CONFIG.colors.gold, metalness: 0.9, roughness: 0.1, emissive: 0xffaa00, emissiveIntensity: 4.0 });
+    const matRed = new THREE.MeshStandardMaterial({ color: CONFIG.colors.red, metalness: 0.6, roughness: 0.3, emissive: 0xff0000, emissiveIntensity: 3.0 });
+    const matGreen = new THREE.MeshStandardMaterial({ color: CONFIG.colors.green, metalness: 0.1, roughness: 0.9, emissive: 0x004400, emissiveIntensity: 1.0 });
 
     for (let i = 0; i < CONFIG.particleCount; i++) {
         let mesh;
@@ -139,7 +129,9 @@ function createParticles() {
         const theta = i * 0.5 + Math.random(); 
         const y = (i / CONFIG.particleCount) * CONFIG.treeHeight - (CONFIG.treeHeight/2);
         const r = (1 - (y + CONFIG.treeHeight/2) / CONFIG.treeHeight) * CONFIG.treeRadius + Math.random() * 2;
-        const treePos = { x: Math.cos(theta) * r, y: y, z: Math.sin(theta) * r };
+        
+        // ✅ 修复：树整体上移 10 个单位，避免底部被切掉
+        const treePos = { x: Math.cos(theta) * r, y: y + 10, z: Math.sin(theta) * r };
         const scatterPos = { x: (Math.random() - 0.5) * CONFIG.scatterRadius * 2, y: (Math.random() - 0.5) * CONFIG.scatterRadius * 2, z: (Math.random() - 0.5) * CONFIG.scatterRadius * 2 };
 
         mesh.userData = { treePos, scatterPos, originalScale: mesh.scale.clone(), isPhoto: false };
@@ -154,10 +146,8 @@ async function loadPhotos() {
         const res = await fetch('data/photos.json');
         if (!res.ok) throw new Error('Fetch failed');
         const items = await res.json();
-        
         photoMeshes.forEach(p => scene.remove(p));
         photoMeshes = [];
-
         const loader = new THREE.TextureLoader();
         items.forEach((item, index) => {
             loader.load(item.src, (texture) => {
@@ -176,33 +166,36 @@ function createPhotoMesh(texture, index, itemData) {
     const geo = new THREE.PlaneGeometry(CONFIG.photoScale * aspect, CONFIG.photoScale);
     
     const mat = new THREE.MeshBasicMaterial({ 
-        map: texture, 
-        side: THREE.DoubleSide, 
-        transparent: true,
-        fog: false,
-        color: 0xd9d9d9 
+        map: texture, side: THREE.DoubleSide, transparent: true, fog: false, color: 0xd9d9d9 
     });
     const mesh = new THREE.Mesh(geo, mat);
     
-    // 布局优化：藏在树里
     const theta = index * 1.5; 
     const y = ((index / 10) - 0.5) * 40; 
     const r = 15 + Math.random() * 8; 
 
+    // ✅ 修复：照片跟随树整体上移
+    const treePos = { x: Math.cos(theta)*r, y: y + 10, z: Math.sin(theta)*r };
+    
+    // ✅ 修复：限制散开模式的 Y 轴范围 (-25 到 25)，防止飞到天上
+    const scatterPos = { 
+        x: (Math.random()-0.5)*70, 
+        y: (Math.random()-0.5)*50, // 限制高度
+        z: (Math.random()-0.5)*50 + 20 // 稍微靠前一点
+    };
+
     mesh.userData = {
-        treePos: { x: Math.cos(theta)*r, y: y, z: Math.sin(theta)*r },
-        scatterPos: { x: (Math.random()-0.5)*60, y: (Math.random()-0.5)*60, z: (Math.random()-0.5)*60 },
+        treePos: treePos,
+        scatterPos: scatterPos,
         isPhoto: true,
         originalScale: new THREE.Vector3(1,1,1),
         desc: itemData.desc,
         aspect: aspect
     };
 
-    mesh.position.set(mesh.userData.treePos.x, mesh.userData.treePos.y, mesh.userData.treePos.z);
+    mesh.position.set(treePos.x, treePos.y, treePos.z);
     mesh.lookAt(0,0,0);
-    
-    // 初始完全隐藏
-    mesh.scale.set(0, 0, 0);
+    mesh.scale.set(0, 0, 0); // 初始隐藏
 
     scene.add(mesh);
     ornaments.push(mesh);
@@ -213,26 +206,22 @@ function findBestPhotoToFocus() {
     if (photoMeshes.length === 0) return -1;
     const centerDir = new THREE.Vector3();
     camera.getWorldDirection(centerDir);
-
     const candidates = photoMeshes.map((mesh, index) => {
         const meshPos = mesh.position.clone();
         const dirToMesh = meshPos.sub(camera.position).normalize();
         const angle = centerDir.angleTo(dirToMesh);
         return { index, angle };
     });
-
     candidates.sort((a, b) => a.angle - b.angle);
-
     let best = candidates[0];
     if (STATE.lastFocusedIndices.includes(best.index)) {
-        if (candidates.length > 1 && candidates[1].angle < 0.5) {
-            best = candidates[1];
-        }
+        if (candidates.length > 1 && candidates[1].angle < 0.5) best = candidates[1];
     }
     STATE.lastFocusedIndices = [best.index];
     return best.index;
 }
 
+// --- 核心逻辑修复：TRANSITIONS ---
 function transitionTo(newState, focusIndex = -1) {
     if (STATE.mode === newState && newState !== 'FOCUS') return;
     STATE.mode = newState;
@@ -246,33 +235,29 @@ function transitionTo(newState, focusIndex = -1) {
         let targetScale = mesh.userData.originalScale;
 
         if (newState === 'TREE') {
+            // 回到树模式
             target = mesh.userData.treePos;
             if(mesh.userData.isPhoto) {
-                mesh.lookAt(0, 0, 0); 
-                // 若隐若现逻辑
-                if (Math.random() > 0.85) {
-                    targetScale = new THREE.Vector3(0.8, 0.8, 0.8);
-                } else {
-                    targetScale = new THREE.Vector3(0.01, 0.01, 0.01);
-                }
+                mesh.lookAt(0, 0, 0);
+                // 捉迷藏：极少数显示，大部分隐藏
+                if (Math.random() > 0.85) targetScale = new THREE.Vector3(0.8, 0.8, 0.8);
+                else targetScale = new THREE.Vector3(0.01, 0.01, 0.01);
             }
         } else if (newState === 'SCATTER') {
+            // 散开模式
             target = mesh.userData.scatterPos;
             if (mesh.userData.isPhoto) targetScale = new THREE.Vector3(1, 1, 1);
         } else if (newState === 'FOCUS') {
+            // 聚焦模式
             if (photoMeshes.indexOf(mesh) === focusIndex) {
+                // 1. 选中的照片：计算位置并放大
                 const camDir = new THREE.Vector3();
                 camera.getWorldDirection(camDir);
-                
                 const screenAspect = window.innerWidth / window.innerHeight;
                 const photoAspect = mesh.userData.aspect;
-                
                 let dist = CONFIG.focus.pcDist; 
-                if (screenAspect < photoAspect) {
-                    dist = CONFIG.focus.mobileDist * (photoAspect / screenAspect) * 0.6; 
-                } else if (screenAspect < 1.0) {
-                    dist = CONFIG.focus.mobileDist;
-                }
+                if (screenAspect < photoAspect) dist = CONFIG.focus.mobileDist * (photoAspect / screenAspect) * 0.6; 
+                else if (screenAspect < 1.0) dist = CONFIG.focus.mobileDist;
                 dist = Math.max(15, Math.min(dist, 60));
 
                 target = { 
@@ -280,13 +265,17 @@ function transitionTo(newState, focusIndex = -1) {
                     y: camera.position.y + camDir.y * dist, 
                     z: camera.position.z + camDir.z * dist 
                 };
-                
                 targetScale = new THREE.Vector3(CONFIG.focus.scale, CONFIG.focus.scale, CONFIG.focus.scale);
                 mesh.lookAt(camera.position);
                 statusText.innerText = mesh.userData.desc || "查看照片";
             } else {
+                // 2. ✅ 没选中的照片：强制隐藏！
+                // 之前这里设为 scatterPos 且 scale=1，导致所有照片突然闪现
+                // 现在改成：未选中照片去 scatterPos，但缩放为 0 (隐藏)
                 target = mesh.userData.scatterPos;
-                if (mesh.userData.isPhoto) targetScale = new THREE.Vector3(1, 1, 1);
+                if (mesh.userData.isPhoto) {
+                    targetScale = new THREE.Vector3(0, 0, 0); 
+                }
             }
         }
 
@@ -337,7 +326,6 @@ function onDocumentClick(event) {
     }
 }
 
-// --- MEDIAPIPE ---
 function detectGesture(landmarks) {
     const wrist = landmarks[0];
     const middleTip = landmarks[12];
@@ -360,7 +348,6 @@ function onResults(results) {
         const landmarks = results.multiHandLandmarks[0];
         const rawGesture = detectGesture(landmarks);
 
-        // ✅ 防抖逻辑：4帧确认 (极速)
         if (rawGesture === STATE.lastGestureName) {
             STATE.gestureFrameCount++;
         } else {
@@ -373,19 +360,23 @@ function onResults(results) {
 
         if (isStable) {
             if (rawGesture === 'PINCH') {
-                statusText.innerText = "👌 锁定 (捏合)";
-                statusText.style.color = "#0f0";
-                
-                const indexTip = landmarks[8];
-                const handCursor = { x: (indexTip.x - 0.5) * 2, y: -(indexTip.y - 0.5) * 2 };
-                raycaster.setFromCamera(handCursor, camera);
-                const intersects = raycaster.intersectObjects(photoMeshes);
-
-                if (intersects.length > 0) {
-                    const targetMesh = intersects[0].object;
-                    const idx = photoMeshes.indexOf(targetMesh);
-                    if (STATE.focusedPhotoIndex !== idx) transitionTo('FOCUS', idx);
-                } 
+                // ✅ 优化：如果是 TREE 模式，捏合无效，提示先张开
+                if (STATE.mode === 'TREE') {
+                    statusText.innerText = "ℹ️ 请先张开手 (OPEN)";
+                    statusText.style.color = "#aaa";
+                } else {
+                    statusText.innerText = "👌 锁定 (捏合)";
+                    statusText.style.color = "#0f0";
+                    const indexTip = landmarks[8];
+                    const handCursor = { x: (indexTip.x - 0.5) * 2, y: -(indexTip.y - 0.5) * 2 };
+                    raycaster.setFromCamera(handCursor, camera);
+                    const intersects = raycaster.intersectObjects(photoMeshes);
+                    if (intersects.length > 0) {
+                        const targetMesh = intersects[0].object;
+                        const idx = photoMeshes.indexOf(targetMesh);
+                        if (STATE.focusedPhotoIndex !== idx) transitionTo('FOCUS', idx);
+                    } 
+                }
             } else if (rawGesture === 'FIST') {
                 statusText.innerText = "✊ 聚树 (握拳)";
                 statusText.style.color = "#d4af37";
@@ -408,7 +399,6 @@ function onResults(results) {
             STATE.rotationTarget.x = handX * 2; 
             STATE.rotationTarget.y = handY * 2;
         }
-
     } else {
         STATE.handPresent = false;
         STATE.gestureFrameCount = 0;
