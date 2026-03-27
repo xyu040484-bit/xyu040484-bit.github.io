@@ -17,8 +17,8 @@ const CONFIG = {
     treeRadius: 25,
     scatterRadius: 80,
     photoScale: 6,
-    treePhotoScale: 1.0,
-    scatterPhotoScale: 1.0,
+   treePhotoScale: 0.58,
+scatterPhotoScale: 0.9,
     focus: {
         mobileDist: 22,
         pcDist: 20,
@@ -485,9 +485,9 @@ function createPhotoMesh(texture, index, itemData) {
 
     const mesh = new THREE.Mesh(geo, mat);
 
-  const theta = index * 1.35;
+const theta = index * 1.35;
 const y = -8 + (index % 10) * 3.2;
-const r = 20 + Math.random() * 10;
+const r = 10 + Math.random() * 5;
 
 const treePos = {
     x: Math.cos(theta) * r,
