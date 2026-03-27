@@ -819,11 +819,44 @@ async function startGestureSystem() {
     }
     animate();
 
-    loadPhotos().catch(err => {
-        console.error('照片加载失败：', err);
-        statusText.innerText = '照片加载失败，但手势系统已启动';
+  async function loadPhotos() {
+    try {
+        loader.style.display = 'block';
+
+        const res = await fetch('data/photos.json');
+        if (!res.ok) throw new Error('Fetch failed');
+
+        const items = await res.json();
+
+        clearPhotoMeshes();
+
+        const textureLoader = new THREE.TextureLoader();
+
+        await Promise.all(
+            items.map((item, index) => {
+                return new Promise((resolve) => {
+                    textureLoader.load(
+                        item.src,
+                        (texture) => {
+                            createPhotoMesh(texture, index, item);
+                            resolve();
+                        },
+                        undefined,
+                        (err) => {
+                            console.warn('单张照片加载失败：', item.src, err);
+                            resolve();
+                        }
+                    );
+                });
+            })
+        );
+    } catch (err) {
+        console.error(err);
+        statusText.innerText = '照片加载失败';
+    } finally {
         loader.style.display = 'none';
-    });
+    }
+}
 }
 function stopGestureSystem() {
     overlay.style.display = 'none';
