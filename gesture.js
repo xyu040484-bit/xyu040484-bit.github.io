@@ -17,7 +17,7 @@ const CONFIG = {
     treeRadius: 25,
     scatterRadius: 80,
     photoScale: 6,
-    treePhotoScale: 0.72,
+    treePhotoScale: 1.0,
     scatterPhotoScale: 1.0,
     focus: {
         mobileDist: 22,
@@ -27,7 +27,8 @@ const CONFIG = {
     gesture: {
         stableMs: 140,
         transitionLockMs: 420
-    }
+    },
+    thumbsBasePath: 'data/photos/thumbs/'
 };
 
 // --- STATE ---
@@ -219,6 +220,18 @@ function stopVideoStream() {
     }
 }
 
+function getFileName(path = '') {
+    const cleaned = String(path).split('?')[0].split('#')[0];
+    const parts = cleaned.split('/');
+    return parts[parts.length - 1] || '';
+}
+
+function getPreviewSrc(item) {
+    if (item.preview) return item.preview;
+    const fileName = getFileName(item.src);
+    return `${CONFIG.thumbsBasePath}${fileName}`;
+}
+
 // --- INIT 3D ---
 function initThree() {
     if (scene) return;
@@ -377,11 +390,14 @@ async function loadPhotos() {
 
         const textureLoader = new THREE.TextureLoader();
 
+        // 先加载缩略图 / 预览图
         await Promise.all(
             items.map((item, index) => {
                 return new Promise((resolve) => {
+                    const previewSrc = getPreviewSrc(item);
+
                     textureLoader.load(
-                        item.src,
+                        previewSrc,
                         (texture) => {
                             if (!STATE.active) {
                                 texture.dispose();
@@ -394,17 +410,78 @@ async function loadPhotos() {
                         },
                         undefined,
                         (err) => {
-                            console.warn('单张照片加载失败：', item.src, err);
-                            resolve();
+                            console.warn('预览图加载失败：', previewSrc, err);
+
+                            // 预览图失败时回退到原图
+                            textureLoader.load(
+                                item.src,
+                                (fallbackTexture) => {
+                                    if (!STATE.active) {
+                                        fallbackTexture.dispose();
+                                        resolve();
+                                        return;
+                                    }
+
+                                    createPhotoMesh(fallbackTexture, index, item);
+                                    resolve();
+                                },
+                                undefined,
+                                (err2) => {
+                                    console.warn('原图回退也失败：', item.src, err2);
+                                    resolve();
+                                }
+                            );
                         }
                     );
                 });
             })
         );
+
+        // 预览图显示出来后立即关 loading
+        loader.style.display = 'none';
+
+        // 后台再加载原图并替换
+        items.forEach((item, index) => {
+            if (!item.src) return;
+
+            const previewSrc = getPreviewSrc(item);
+            if (item.src === previewSrc) return;
+
+            textureLoader.load(
+                item.src,
+                (fullTexture) => {
+                    const mesh = photoMeshes[index];
+                    if (!mesh || !mesh.material || !STATE.active) {
+                        fullTexture.dispose();
+                        return;
+                    }
+
+                    const oldMap = mesh.material.map;
+                    mesh.material.map = fullTexture;
+                    mesh.material.needsUpdate = true;
+
+                    const aspect = fullTexture.image.width / fullTexture.image.height;
+                    const newGeo = new THREE.PlaneGeometry(CONFIG.photoScale * aspect, CONFIG.photoScale);
+
+                    if (mesh.geometry) {
+                        mesh.geometry.dispose();
+                    }
+                    mesh.geometry = newGeo;
+                    mesh.userData.aspect = aspect;
+
+                    if (oldMap) {
+                        oldMap.dispose();
+                    }
+                },
+                undefined,
+                (err) => {
+                    console.warn('原图加载失败：', item.src, err);
+                }
+            );
+        });
     } catch (err) {
         console.error(err);
         statusText.innerText = '照片加载失败';
-    } finally {
         loader.style.display = 'none';
     }
 }
@@ -480,19 +557,17 @@ function transitionTo(newState, focusIndex = -1) {
 
             if (mesh.userData.isPhoto) {
                 targetScale = getPhotoScaleByMode('TREE');
-                scaleDuration = 520;
+                scaleDuration = 480;
                 scaleEasing = TWEEN.Easing.Cubic.InOut;
             }
-
         } else if (newState === 'SCATTER') {
             target = mesh.userData.scatterPos;
 
             if (mesh.userData.isPhoto) {
                 targetScale = getPhotoScaleByMode('SCATTER');
-                scaleDuration = 620;
+                scaleDuration = 480;
                 scaleEasing = TWEEN.Easing.Cubic.InOut;
             }
-
         } else if (newState === 'FOCUS') {
             if (photoMeshes.indexOf(mesh) === focusIndex) {
                 const camDir = new THREE.Vector3();
@@ -517,7 +592,7 @@ function transitionTo(newState, focusIndex = -1) {
                 };
 
                 targetScale = getPhotoScaleByMode('FOCUS', true);
-                scaleDuration = 700;
+                scaleDuration = 650;
                 scaleEasing = TWEEN.Easing.Cubic.Out;
 
                 mesh.lookAt(camera.position);
@@ -531,7 +606,7 @@ function transitionTo(newState, focusIndex = -1) {
 
                 if (mesh.userData.isPhoto) {
                     targetScale = new THREE.Vector3(0, 0, 0);
-                    scaleDuration = 420;
+                    scaleDuration = 380;
                     scaleEasing = TWEEN.Easing.Cubic.Out;
                 }
             }
@@ -549,7 +624,9 @@ function transitionTo(newState, focusIndex = -1) {
                 .start();
         }
     });
-}// --- GESTURE DETECTION ---
+}
+
+// --- GESTURE DETECTION ---
 function detectGesture(landmarks) {
     const wrist = landmarks[0];
     const middleTip = landmarks[12];
@@ -608,7 +685,6 @@ function onResults(results) {
                 transitionTo('TREE');
                 STATE.transitionLockUntil = now + CONFIG.gesture.transitionLockMs;
             }
-
         } else if (STATE.stableGesture === 'OPEN') {
             statusText.innerText = '🖐 浏览 (张手)';
             statusText.style.color = '#fff';
@@ -617,7 +693,6 @@ function onResults(results) {
                 transitionTo('SCATTER');
                 STATE.transitionLockUntil = now + CONFIG.gesture.transitionLockMs;
             }
-
         } else if (STATE.stableGesture === 'PINCH') {
             statusText.innerText = '👌 锁定 (捏合)';
             statusText.style.color = '#0f0';
@@ -659,7 +734,6 @@ function onResults(results) {
                 }
             }
         }
-
     } else {
         STATE.handPresent = false;
         resetGestureStabilizer();
