@@ -161,17 +161,9 @@ function clearPhotoMeshes() {
     photoMeshes.forEach(mesh => {
         if (!mesh) return;
 
-        if (scene) {
-            scene.remove(mesh);
-        }
-
-        if (mesh.geometry) {
-            mesh.geometry.dispose();
-        }
-
-        if (mesh.material) {
-            disposeMaterial(mesh.material);
-        }
+        if (scene) scene.remove(mesh);
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) disposeMaterial(mesh.material);
     });
 
     ornaments = ornaments.filter(mesh => !mesh.userData?.isPhoto);
@@ -187,13 +179,8 @@ function clearNonPhotoOrnaments() {
     ornaments.forEach(mesh => {
         if (!mesh || mesh.userData?.isPhoto) return;
 
-        if (scene) {
-            scene.remove(mesh);
-        }
-
-        if (mesh.geometry) {
-            geometries.add(mesh.geometry);
-        }
+        if (scene) scene.remove(mesh);
+        if (mesh.geometry) geometries.add(mesh.geometry);
 
         if (mesh.material) {
             if (Array.isArray(mesh.material)) {
@@ -227,7 +214,7 @@ function getFileName(path = '') {
 }
 
 function getPreviewSrc(item) {
-    if (item.preview) return item.preview;
+    if (item.thumb) return item.thumb;
     const fileName = getFileName(item.src);
     return `${CONFIG.thumbsBasePath}${fileName}`;
 }
@@ -390,7 +377,7 @@ async function loadPhotos() {
 
         const textureLoader = new THREE.TextureLoader();
 
-        // 先加载缩略图 / 预览图
+        // 先加载缩略图
         await Promise.all(
             items.map((item, index) => {
                 return new Promise((resolve) => {
@@ -410,9 +397,8 @@ async function loadPhotos() {
                         },
                         undefined,
                         (err) => {
-                            console.warn('预览图加载失败：', previewSrc, err);
+                            console.warn('缩略图加载失败：', previewSrc, err);
 
-                            // 预览图失败时回退到原图
                             textureLoader.load(
                                 item.src,
                                 (fallbackTexture) => {
@@ -437,10 +423,9 @@ async function loadPhotos() {
             })
         );
 
-        // 预览图显示出来后立即关 loading
         loader.style.display = 'none';
 
-        // 后台再加载原图并替换
+        // 后台替换原图
         items.forEach((item, index) => {
             if (!item.src) return;
 
@@ -549,24 +534,20 @@ function transitionTo(newState, focusIndex = -1) {
     ornaments.forEach(mesh => {
         let target = mesh.position.clone();
         let targetScale = mesh.userData.originalScale;
-        let scaleDuration = 650;
-        let scaleEasing = TWEEN.Easing.Cubic.Out;
+        let scaleDuration = 480;
+        let scaleEasing = TWEEN.Easing.Cubic.InOut;
 
         if (newState === 'TREE') {
             target = mesh.userData.treePos;
 
             if (mesh.userData.isPhoto) {
                 targetScale = getPhotoScaleByMode('TREE');
-                scaleDuration = 480;
-                scaleEasing = TWEEN.Easing.Cubic.InOut;
             }
         } else if (newState === 'SCATTER') {
             target = mesh.userData.scatterPos;
 
             if (mesh.userData.isPhoto) {
                 targetScale = getPhotoScaleByMode('SCATTER');
-                scaleDuration = 480;
-                scaleEasing = TWEEN.Easing.Cubic.InOut;
             }
         } else if (newState === 'FOCUS') {
             if (photoMeshes.indexOf(mesh) === focusIndex) {
