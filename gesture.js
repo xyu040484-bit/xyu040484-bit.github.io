@@ -802,15 +802,11 @@ function disposeThree() {
 }
 
 async function startGestureSystem() {
-    if (STATE.active) return;
-
-    resetStateForOpen();
-    resetUIForOpen();
+    overlay.style.display = 'block';
+    STATE.active = true;
+    document.body.style.overflow = 'hidden';
 
     initThree();
-    resetSceneTransforms();
-
-    await loadPhotos();
     await initHands();
 
     if (cameraPipe && typeof cameraPipe.start === 'function') {
@@ -821,10 +817,14 @@ async function startGestureSystem() {
         cancelAnimationFrame(rafId);
         rafId = null;
     }
-
     animate();
-}
 
+    loadPhotos().catch(err => {
+        console.error('照片加载失败：', err);
+        statusText.innerText = '照片加载失败，但手势系统已启动';
+        loader.style.display = 'none';
+    });
+}
 function stopGestureSystem() {
     overlay.style.display = 'none';
     STATE.active = false;
