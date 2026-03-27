@@ -17,10 +17,16 @@ const CONFIG = {
     treeRadius: 25,
     scatterRadius: 80,
     photoScale: 6,
+    treePhotoScale: 0.72,
+    scatterPhotoScale: 1.0,
     focus: {
         mobileDist: 22,
         pcDist: 20,
         scale: 2.0
+    },
+    gesture: {
+        stableMs: 140,
+        transitionLockMs: 420
     }
 };
 
@@ -32,19 +38,36 @@ const STATE = {
     handPresent: false,
     rotationTarget: { x: 0, y: 0 },
     focusedPhotoIndex: -1,
-    lastFocusedIndices: []
+    lastFocusedIndices: [],
+    lastGestureRaw: null,
+    lastGestureRawSince: 0,
+    stableGesture: null,
+    transitionLockUntil: 0
 };
 
 // --- GLOBALS ---
-let scene, camera, renderer, composer, controlsOrbit;
+let scene = null;
+let camera = null;
+let renderer = null;
+let composer = null;
+let controlsOrbit = null;
+
 let ornaments = [];
 let photoMeshes = [];
-let hands, cameraPipe, rafId;
-let raycaster, mouse;
-let ambientLight, dirLight, pointLight;
+
+let hands = null;
+let cameraPipe = null;
+let rafId = null;
+
+let raycaster = null;
+let mouse = null;
+
+let ambientLight = null;
+let dirLight = null;
+let pointLight = null;
+
 let resizeHandlerBound = false;
 let clickHandlerBound = false;
-let photosLoaded = false;
 
 // DOM
 const overlay = document.getElementById('gesture-overlay');
@@ -57,10 +80,17 @@ const mouseControls = document.getElementById('mouse-controls');
 const btnInputMode = document.getElementById('btn-input-mode');
 
 // --- HELPERS ---
-function stopAllTweens() {
+function clearAllTweens() {
     if (typeof TWEEN !== 'undefined' && typeof TWEEN.removeAll === 'function') {
         TWEEN.removeAll();
     }
+}
+
+function resetGestureStabilizer() {
+    STATE.lastGestureRaw = null;
+    STATE.lastGestureRawSince = 0;
+    STATE.stableGesture = null;
+    STATE.transitionLockUntil = 0;
 }
 
 function resetStateForOpen() {
@@ -70,12 +100,14 @@ function resetStateForOpen() {
     STATE.focusedPhotoIndex = -1;
     STATE.lastFocusedIndices = [];
     STATE.rotationTarget = { x: 0, y: 0 };
+    resetGestureStabilizer();
 }
 
 function resetUIForOpen() {
-    loader.style.display = 'block';
     overlay.style.display = 'block';
+    loader.style.display = 'block';
     document.body.style.overflow = 'hidden';
+    statusText.style.color = '#fff';
 
     if (STATE.inputMode === 'GESTURE') {
         btnInputMode.innerText = '🖐️ 手势模式';
@@ -108,6 +140,22 @@ function disposeMaterial(material) {
     material.dispose();
 }
 
+function getPhotoScaleByMode(mode, isFocused = false) {
+    if (isFocused) {
+        return new THREE.Vector3(CONFIG.focus.scale, CONFIG.focus.scale, CONFIG.focus.scale);
+    }
+
+    if (mode === 'TREE') {
+        return new THREE.Vector3(CONFIG.treePhotoScale, CONFIG.treePhotoScale, CONFIG.treePhotoScale);
+    }
+
+    if (mode === 'SCATTER') {
+        return new THREE.Vector3(CONFIG.scatterPhotoScale, CONFIG.scatterPhotoScale, CONFIG.scatterPhotoScale);
+    }
+
+    return new THREE.Vector3(0, 0, 0);
+}
+
 function clearPhotoMeshes() {
     photoMeshes.forEach(mesh => {
         if (!mesh) return;
@@ -129,10 +177,12 @@ function clearPhotoMeshes() {
     photoMeshes = [];
     STATE.focusedPhotoIndex = -1;
     STATE.lastFocusedIndices = [];
-    photosLoaded = false;
 }
 
 function clearNonPhotoOrnaments() {
+    const geometries = new Set();
+    const materials = new Set();
+
     ornaments.forEach(mesh => {
         if (!mesh || mesh.userData?.isPhoto) return;
 
@@ -141,13 +191,20 @@ function clearNonPhotoOrnaments() {
         }
 
         if (mesh.geometry) {
-            mesh.geometry.dispose();
+            geometries.add(mesh.geometry);
         }
 
         if (mesh.material) {
-            disposeMaterial(mesh.material);
+            if (Array.isArray(mesh.material)) {
+                mesh.material.forEach(mat => materials.add(mat));
+            } else {
+                materials.add(mesh.material);
+            }
         }
     });
+
+    geometries.forEach(geo => geo.dispose());
+    materials.forEach(mat => disposeMaterial(mat));
 
     ornaments = ornaments.filter(mesh => mesh.userData?.isPhoto);
 }
@@ -162,27 +219,6 @@ function stopVideoStream() {
     }
 }
 
-function resetSceneTransforms() {
-    ornaments.forEach(mesh => {
-        if (!mesh || !mesh.userData) return;
-
-        const { treePos, originalScale, isPhoto } = mesh.userData;
-        if (treePos) {
-            mesh.position.set(treePos.x, treePos.y, treePos.z);
-        }
-
-        if (isPhoto) {
-            mesh.scale.set(0, 0, 0);
-        } else if (originalScale) {
-            mesh.scale.copy(originalScale);
-        }
-
-        if (isPhoto) {
-            mesh.lookAt(0, 0, 0);
-        }
-    });
-}
-
 // --- INIT 3D ---
 function initThree() {
     if (scene) return;
@@ -191,10 +227,18 @@ function initThree() {
     scene.background = new THREE.Color(CONFIG.colors.bg);
     scene.fog = new THREE.FogExp2(CONFIG.colors.bg, 0.015);
 
-    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera = new THREE.PerspectiveCamera(
+        60,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+    );
     camera.position.set(0, 10, 80);
 
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true
+    });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.NoToneMapping;
@@ -260,6 +304,7 @@ function createParticles() {
         emissive: 0xffaa00,
         emissiveIntensity: 4.0
     });
+
     const matRed = new THREE.MeshStandardMaterial({
         color: CONFIG.colors.red,
         metalness: 0.6,
@@ -267,6 +312,7 @@ function createParticles() {
         emissive: 0xff0000,
         emissiveIntensity: 3.0
     });
+
     const matGreen = new THREE.MeshStandardMaterial({
         color: CONFIG.colors.green,
         metalness: 0.1,
@@ -287,7 +333,9 @@ function createParticles() {
 
         const theta = i * 0.5 + Math.random();
         const y = (i / CONFIG.particleCount) * CONFIG.treeHeight - (CONFIG.treeHeight / 2);
-        const r = (1 - (y + CONFIG.treeHeight / 2) / CONFIG.treeHeight) * CONFIG.treeRadius + Math.random() * 2;
+        const r =
+            (1 - (y + CONFIG.treeHeight / 2) / CONFIG.treeHeight) * CONFIG.treeRadius +
+            Math.random() * 2;
 
         const treePos = {
             x: Math.cos(theta) * r,
@@ -331,26 +379,33 @@ async function loadPhotos() {
 
         await Promise.all(
             items.map((item, index) => {
-                return new Promise((resolve, reject) => {
+                return new Promise((resolve) => {
                     textureLoader.load(
                         item.src,
                         (texture) => {
+                            if (!STATE.active) {
+                                texture.dispose();
+                                resolve();
+                                return;
+                            }
+
                             createPhotoMesh(texture, index, item);
                             resolve();
                         },
                         undefined,
-                        (err) => reject(err)
+                        (err) => {
+                            console.warn('单张照片加载失败：', item.src, err);
+                            resolve();
+                        }
                     );
                 });
             })
         );
-
-        photosLoaded = true;
-        loader.style.display = 'none';
     } catch (err) {
         console.error(err);
+        statusText.innerText = '照片加载失败';
+    } finally {
         loader.style.display = 'none';
-        statusText.innerText = 'Error loading photos';
     }
 }
 
@@ -395,14 +450,16 @@ function createPhotoMesh(texture, index, itemData) {
 
     mesh.position.set(treePos.x, treePos.y, treePos.z);
     mesh.lookAt(0, 0, 0);
-    mesh.scale.set(0, 0, 0);
+
+    const initialScale = getPhotoScaleByMode(STATE.mode);
+    mesh.scale.copy(initialScale);
 
     scene.add(mesh);
     ornaments.push(mesh);
     photoMeshes.push(mesh);
 }
 
-// --- 状态逻辑锁 ---
+// --- STATE TRANSITION ---
 function transitionTo(newState, focusIndex = -1) {
     if (!scene || !camera) return;
     if (STATE.mode === newState && newState !== 'FOCUS') return;
@@ -410,24 +467,32 @@ function transitionTo(newState, focusIndex = -1) {
     STATE.mode = newState;
     STATE.focusedPhotoIndex = focusIndex;
 
-    stopAllTweens();
+    clearAllTweens();
 
     ornaments.forEach(mesh => {
-        let target;
+        let target = mesh.position.clone();
         let targetScale = mesh.userData.originalScale;
+        let scaleDuration = 650;
+        let scaleEasing = TWEEN.Easing.Cubic.Out;
 
         if (newState === 'TREE') {
             target = mesh.userData.treePos;
 
             if (mesh.userData.isPhoto) {
-                targetScale = new THREE.Vector3(0, 0, 0);
+                targetScale = getPhotoScaleByMode('TREE');
+                scaleDuration = 520;
+                scaleEasing = TWEEN.Easing.Cubic.InOut;
             }
+
         } else if (newState === 'SCATTER') {
             target = mesh.userData.scatterPos;
 
             if (mesh.userData.isPhoto) {
-                targetScale = new THREE.Vector3(1, 1, 1);
+                targetScale = getPhotoScaleByMode('SCATTER');
+                scaleDuration = 620;
+                scaleEasing = TWEEN.Easing.Cubic.InOut;
             }
+
         } else if (newState === 'FOCUS') {
             if (photoMeshes.indexOf(mesh) === focusIndex) {
                 const camDir = new THREE.Vector3();
@@ -451,11 +516,9 @@ function transitionTo(newState, focusIndex = -1) {
                     z: camera.position.z + camDir.z * dist
                 };
 
-                targetScale = new THREE.Vector3(
-                    CONFIG.focus.scale,
-                    CONFIG.focus.scale,
-                    CONFIG.focus.scale
-                );
+                targetScale = getPhotoScaleByMode('FOCUS', true);
+                scaleDuration = 700;
+                scaleEasing = TWEEN.Easing.Cubic.Out;
 
                 mesh.lookAt(camera.position);
                 statusText.innerText = mesh.userData.desc || '查看照片';
@@ -468,25 +531,25 @@ function transitionTo(newState, focusIndex = -1) {
 
                 if (mesh.userData.isPhoto) {
                     targetScale = new THREE.Vector3(0, 0, 0);
+                    scaleDuration = 420;
+                    scaleEasing = TWEEN.Easing.Cubic.Out;
                 }
             }
         }
 
         new TWEEN.Tween(mesh.position)
-            .to(target, 1500)
+            .to(target, 1300)
             .easing(TWEEN.Easing.Exponential.InOut)
             .start();
 
         if (mesh.userData.isPhoto) {
             new TWEEN.Tween(mesh.scale)
-                .to(targetScale, 1000)
-                .easing(TWEEN.Easing.Back.Out)
+                .to(targetScale, scaleDuration)
+                .easing(scaleEasing)
                 .start();
         }
     });
-}
-
-// --- 手势判定逻辑 (状态锁) ---
+}// --- GESTURE DETECTION ---
 function detectGesture(landmarks) {
     const wrist = landmarks[0];
     const middleTip = landmarks[12];
@@ -510,73 +573,20 @@ function detectGesture(landmarks) {
 function onResults(results) {
     if (!STATE.active || STATE.inputMode === 'MOUSE') return;
 
-    loader.style.display = 'none';
-
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         STATE.handPresent = true;
+
         const landmarks = results.multiHandLandmarks[0];
         const rawGesture = detectGesture(landmarks);
+        const now = performance.now();
 
-        if (rawGesture === 'FIST') {
-            statusText.innerText = '✊ 聚树';
-            statusText.style.color = '#d4af37';
+        if (rawGesture !== STATE.lastGestureRaw) {
+            STATE.lastGestureRaw = rawGesture;
+            STATE.lastGestureRawSince = now;
+        }
 
-            if (STATE.mode !== 'TREE') {
-                transitionTo('TREE');
-            }
-        } else if (rawGesture === 'OPEN') {
-            statusText.innerText = '🖐 浏览 (张手)';
-            statusText.style.color = '#fff';
-
-            if (STATE.mode === 'TREE' || STATE.mode === 'FOCUS') {
-                transitionTo('SCATTER');
-            }
-        } else if (rawGesture === 'PINCH') {
-            statusText.innerText = '👌 锁定 (捏合)';
-            statusText.style.color = '#0f0';
-
-            if (STATE.mode === 'SCATTER') {
-                const indexTip = landmarks[8];
-                const handCursor = {
-                    x: (indexTip.x - 0.5) * 2,
-                    y: -(indexTip.y - 0.5) * 2
-                };
-
-                raycaster.setFromCamera(handCursor, camera);
-                const intersects = raycaster.intersectObjects(photoMeshes);
-
-                if (intersects.length > 0) {
-                    const targetMesh = intersects[0].object;
-                    const idx = photoMeshes.indexOf(targetMesh);
-
-                    if (STATE.focusedPhotoIndex !== idx) {
-                        transitionTo('FOCUS', idx);
-                    }
-                } else {
-                    const bestIdx = findBestPhotoToFocus();
-                    if (bestIdx !== -1 && STATE.focusedPhotoIndex !== bestIdx) {
-                        transitionTo('FOCUS', bestIdx);
-                    }
-                }
-            } else if (STATE.mode === 'FOCUS') {
-                const indexTip = landmarks[8];
-                const handCursor = {
-                    x: (indexTip.x - 0.5) * 2,
-                    y: -(indexTip.y - 0.5) * 2
-                };
-
-                raycaster.setFromCamera(handCursor, camera);
-                const intersects = raycaster.intersectObjects(photoMeshes);
-
-                if (intersects.length > 0) {
-                    const targetMesh = intersects[0].object;
-                    const idx = photoMeshes.indexOf(targetMesh);
-
-                    if (STATE.focusedPhotoIndex !== idx) {
-                        transitionTo('FOCUS', idx);
-                    }
-                }
-            }
+        if (now - STATE.lastGestureRawSince >= CONFIG.gesture.stableMs) {
+            STATE.stableGesture = rawGesture;
         }
 
         if (STATE.mode !== 'FOCUS') {
@@ -585,15 +595,81 @@ function onResults(results) {
             STATE.rotationTarget.x = handX * 2;
             STATE.rotationTarget.y = handY * 2;
         }
+
+        if (now < STATE.transitionLockUntil || !STATE.stableGesture) {
+            return;
+        }
+
+        if (STATE.stableGesture === 'FIST') {
+            statusText.innerText = '✊ 聚树';
+            statusText.style.color = '#d4af37';
+
+            if (STATE.mode !== 'TREE') {
+                transitionTo('TREE');
+                STATE.transitionLockUntil = now + CONFIG.gesture.transitionLockMs;
+            }
+
+        } else if (STATE.stableGesture === 'OPEN') {
+            statusText.innerText = '🖐 浏览 (张手)';
+            statusText.style.color = '#fff';
+
+            if (STATE.mode === 'TREE' || STATE.mode === 'FOCUS') {
+                transitionTo('SCATTER');
+                STATE.transitionLockUntil = now + CONFIG.gesture.transitionLockMs;
+            }
+
+        } else if (STATE.stableGesture === 'PINCH') {
+            statusText.innerText = '👌 锁定 (捏合)';
+            statusText.style.color = '#0f0';
+
+            const indexTip = landmarks[8];
+            const handCursor = {
+                x: (indexTip.x - 0.5) * 2,
+                y: -(indexTip.y - 0.5) * 2
+            };
+
+            raycaster.setFromCamera(handCursor, camera);
+            const intersects = raycaster.intersectObjects(photoMeshes);
+
+            if (STATE.mode === 'SCATTER') {
+                if (intersects.length > 0) {
+                    const targetMesh = intersects[0].object;
+                    const idx = photoMeshes.indexOf(targetMesh);
+
+                    if (STATE.focusedPhotoIndex !== idx) {
+                        transitionTo('FOCUS', idx);
+                        STATE.transitionLockUntil = now + 260;
+                    }
+                } else {
+                    const bestIdx = findBestPhotoToFocus();
+                    if (bestIdx !== -1 && STATE.focusedPhotoIndex !== bestIdx) {
+                        transitionTo('FOCUS', bestIdx);
+                        STATE.transitionLockUntil = now + 260;
+                    }
+                }
+            } else if (STATE.mode === 'FOCUS') {
+                if (intersects.length > 0) {
+                    const targetMesh = intersects[0].object;
+                    const idx = photoMeshes.indexOf(targetMesh);
+
+                    if (STATE.focusedPhotoIndex !== idx) {
+                        transitionTo('FOCUS', idx);
+                        STATE.transitionLockUntil = now + 260;
+                    }
+                }
+            }
+        }
+
     } else {
         STATE.handPresent = false;
+        resetGestureStabilizer();
         statusText.innerText = '请举起手...';
         statusText.style.color = '#fff';
     }
 }
 
 function findBestPhotoToFocus() {
-    if (photoMeshes.length === 0) return -1;
+    if (!photoMeshes.length || !camera) return -1;
 
     const centerDir = new THREE.Vector3();
     camera.getWorldDirection(centerDir);
@@ -608,11 +684,16 @@ function findBestPhotoToFocus() {
     candidates.sort((a, b) => a.angle - b.angle);
 
     let best = candidates[0];
-    if (STATE.lastFocusedIndices.includes(best.index)) {
-        if (candidates.length > 1 && candidates[1].angle < 0.5) {
-            best = candidates[1];
-        }
+    if (
+        best &&
+        STATE.lastFocusedIndices.includes(best.index) &&
+        candidates.length > 1 &&
+        candidates[1].angle < 0.5
+    ) {
+        best = candidates[1];
     }
+
+    if (!best) return -1;
 
     STATE.lastFocusedIndices = [best.index];
     return best.index;
@@ -631,7 +712,10 @@ function toggleInputMode() {
             controlsOrbit.enabled = true;
         }
 
-        camera.position.set(0, 20, 80);
+        if (camera) {
+            camera.position.set(0, 20, 80);
+            camera.lookAt(0, 10, 0);
+        }
     } else {
         STATE.inputMode = 'GESTURE';
         btnInputMode.innerText = '🖐️ 手势模式';
@@ -647,7 +731,7 @@ function toggleInputMode() {
 }
 
 function onDocumentClick(event) {
-    if (STATE.inputMode !== 'MOUSE' || !STATE.active) return;
+    if (STATE.inputMode !== 'MOUSE' || !STATE.active || !camera || !raycaster) return;
     if (event.target.closest('#controls') || event.target.closest('#ui-layer button')) return;
 
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -666,42 +750,45 @@ function onDocumentClick(event) {
 }
 
 async function initHands() {
-    if (hands) return;
+    if (!hands) {
+        hands = new window.Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
 
-    const video = document.getElementById('video-input');
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
 
-    hands = new window.Hands({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-    });
+        hands.onResults(onResults);
+    }
 
-    hands.setOptions({
-        maxNumHands: 1,
-        modelComplexity: 1,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
-    });
-
-    hands.onResults(onResults);
-
-    cameraPipe = new window.Camera(video, {
-        onFrame: async () => {
-            if (STATE.active) {
-                await hands.send({ image: video });
-            }
-        },
-        width: 320,
-        height: 240
-    });
+    if (!cameraPipe) {
+        cameraPipe = new window.Camera(videoElement, {
+            onFrame: async () => {
+                if (STATE.active && hands) {
+                    await hands.send({ image: videoElement });
+                }
+            },
+            width: 320,
+            height: 240
+        });
+    }
 }
 
-function animate(time) {
+function animate(time = 0) {
     if (!STATE.active) return;
 
     rafId = requestAnimationFrame(animate);
-    TWEEN.update(time);
+
+    if (typeof TWEEN !== 'undefined' && typeof TWEEN.update === 'function') {
+        TWEEN.update(time);
+    }
 
     if (STATE.inputMode === 'MOUSE') {
-        if (controlsOrbit) {
+        if (controlsOrbit && controlsOrbit.enabled) {
             controlsOrbit.update();
         }
     } else {
@@ -713,9 +800,12 @@ function animate(time) {
             const targetPhi = STATE.rotationTarget.y;
             const timeAngle = time * 0.0001;
 
-            camera.position.x += (Math.sin(targetTheta + timeAngle) * radius - camera.position.x) * 0.05;
-            camera.position.z += (Math.cos(targetTheta + timeAngle) * radius - camera.position.z) * 0.05;
-            camera.position.y += (-targetPhi * 20 - camera.position.y + 10) * 0.05;
+            camera.position.x +=
+                (Math.sin(targetTheta + timeAngle) * radius - camera.position.x) * 0.05;
+            camera.position.z +=
+                (Math.cos(targetTheta + timeAngle) * radius - camera.position.z) * 0.05;
+            camera.position.y +=
+                (-targetPhi * 20 - camera.position.y + 10) * 0.05;
             camera.lookAt(0, 0, 0);
         } else {
             const radius = 80;
@@ -729,9 +819,9 @@ function animate(time) {
     }
 
     if (STATE.mode === 'FOCUS' && STATE.focusedPhotoIndex > -1) {
-        const p = photoMeshes[STATE.focusedPhotoIndex];
-        if (p) {
-            p.lookAt(camera.position);
+        const focused = photoMeshes[STATE.focusedPhotoIndex];
+        if (focused) {
+            focused.lookAt(camera.position);
         }
     }
 
@@ -758,7 +848,7 @@ function onWindowResize() {
 }
 
 function disposeThree() {
-    stopAllTweens();
+    clearAllTweens();
 
     if (clickHandlerBound) {
         window.removeEventListener('click', onDocumentClick);
@@ -778,9 +868,7 @@ function disposeThree() {
         controlsOrbit = null;
     }
 
-    if (composer) {
-        composer = null;
-    }
+    composer = null;
 
     if (renderer) {
         renderer.dispose();
@@ -802,9 +890,10 @@ function disposeThree() {
 }
 
 async function startGestureSystem() {
-    overlay.style.display = 'block';
-    STATE.active = true;
-    document.body.style.overflow = 'hidden';
+    if (STATE.active) return;
+
+    resetStateForOpen();
+    resetUIForOpen();
 
     initThree();
     await initHands();
@@ -819,45 +908,13 @@ async function startGestureSystem() {
     }
     animate();
 
-  async function loadPhotos() {
-    try {
-        loader.style.display = 'block';
-
-        const res = await fetch('data/photos.json');
-        if (!res.ok) throw new Error('Fetch failed');
-
-        const items = await res.json();
-
-        clearPhotoMeshes();
-
-        const textureLoader = new THREE.TextureLoader();
-
-        await Promise.all(
-            items.map((item, index) => {
-                return new Promise((resolve) => {
-                    textureLoader.load(
-                        item.src,
-                        (texture) => {
-                            createPhotoMesh(texture, index, item);
-                            resolve();
-                        },
-                        undefined,
-                        (err) => {
-                            console.warn('单张照片加载失败：', item.src, err);
-                            resolve();
-                        }
-                    );
-                });
-            })
-        );
-    } catch (err) {
-        console.error(err);
-        statusText.innerText = '照片加载失败';
-    } finally {
+    loadPhotos().catch(err => {
+        console.error('照片加载失败：', err);
+        statusText.innerText = '照片加载失败，但手势系统已启动';
         loader.style.display = 'none';
-    }
+    });
 }
-}
+
 function stopGestureSystem() {
     overlay.style.display = 'none';
     STATE.active = false;
@@ -869,20 +926,22 @@ function stopGestureSystem() {
         rafId = null;
     }
 
-    stopAllTweens();
+    clearAllTweens();
 
     if (cameraPipe && typeof cameraPipe.stop === 'function') {
         cameraPipe.stop();
     }
 
     stopVideoStream();
-
     disposeThree();
+    resetGestureStabilizer();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     const openBtn = document.getElementById('btn-open-gesture');
     const closeBtn = document.getElementById('btn-close-gesture');
+    const treeBtn = document.getElementById('btn-tree');
+    const scatterBtn = document.getElementById('btn-scatter');
 
     if (openBtn) {
         openBtn.addEventListener('click', startGestureSystem);
@@ -893,12 +952,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (btnInputMode) {
-        btnInputMode.removeEventListener('click', toggleInputMode);
         btnInputMode.addEventListener('click', toggleInputMode);
     }
-
-    const treeBtn = document.getElementById('btn-tree');
-    const scatterBtn = document.getElementById('btn-scatter');
 
     if (treeBtn) {
         treeBtn.addEventListener('click', () => transitionTo('TREE'));
