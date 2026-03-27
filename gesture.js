@@ -485,22 +485,21 @@ function createPhotoMesh(texture, index, itemData) {
 
     const mesh = new THREE.Mesh(geo, mat);
 
-    const theta = index * 1.5;
-    const y = ((index / 10) - 0.5) * 40;
-    const r = 15 + Math.random() * 8;
+  const theta = index * 1.35;
+const y = -8 + (index % 10) * 3.2;
+const r = 20 + Math.random() * 10;
 
-    const treePos = {
-        x: Math.cos(theta) * r,
-        y: y + 15,
-        z: Math.sin(theta) * r
-    };
+const treePos = {
+    x: Math.cos(theta) * r,
+    y: y,
+    z: Math.sin(theta) * r
+};
 
-    const scatterPos = {
-        x: (Math.random() - 0.5) * 80,
-        y: (Math.random() - 0.5) * 20,
-        z: (Math.random() - 0.5) * 40 + 20
-    };
-
+const scatterPos = {
+    x: (Math.random() - 0.5) * 80,
+    y: (Math.random() - 0.5) * 18,
+    z: (Math.random() - 0.5) * 40 + 20
+};
     mesh.userData = {
         treePos,
         scatterPos,
