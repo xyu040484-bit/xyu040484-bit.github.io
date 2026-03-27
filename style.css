@@ -280,3 +280,61 @@ body.hero-anim .gpt-mark .strip {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   color: #d4af37; z-index: 20; letter-spacing: 3px; pointer-events: none;
 }
+.print-grid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap:16px;
+  margin-top:18px;
+}
+
+.print-entry{
+  display:block;
+  padding:18px;
+  border-radius:16px;
+  background:#f8fafc;
+  border:1px solid rgba(0,0,0,0.06);
+  color:#111;
+  text-decoration:none;
+  transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+
+.print-entry:hover{
+  transform:translateY(-3px);
+  box-shadow:0 10px 24px rgba(0,0,0,0.08);
+  border-color:rgba(0,0,0,0.12);
+}
+
+.print-entry-title{
+  font-size:18px;
+  font-weight:700;
+  margin-bottom:8px;
+}
+
+.print-entry-desc{
+  font-size:13px;
+  color:#6b7280;
+  line-height:1.7;
+  margin-bottom:14px;
+}
+
+.print-links p{
+  margin:0;
+  padding-top:10px;
+  border-top:1px dashed #e5e7eb;
+}
+
+.print-links a{
+  color:#2563eb;
+  font-weight:500;
+  text-decoration:none;
+}
+
+.print-links a:hover{
+  text-decoration:underline;
+}
+
+@media (max-width: 720px){
+  .print-grid{
+    grid-template-columns: 1fr;
+  }
+}

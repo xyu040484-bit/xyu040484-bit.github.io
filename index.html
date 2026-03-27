@@ -73,7 +73,7 @@
             </button>
             <button class="tile" type="button" data-modal="modal-print">
               <div class="tile-title">3D 打印</div>
-              <div class="tile-desc">模型 / 参数 / 成品</div>
+             <div class="tile-desc">作品 / 札记 / 记录</div>
             </button>
           </div>
         </div>
@@ -148,22 +148,41 @@
     </div>
   </div>
 
-  <div class="modal" id="modal-print" aria-hidden="true">
-    <div class="modal-backdrop" data-close></div>
-    <div class="modal-panel" role="dialog" aria-modal="true" aria-label="3D 打印">
-      <div class="modal-head">
-        <div class="modal-title">3D 打印</div>
-        <button class="icon-btn" type="button" data-close aria-label="关闭">×</button>
-      </div>
-      <div class="modal-body">
-        <p>欢迎来到3D打印界面。（手动撒花）</p>
-        <p class="muted">ps：（对于3D打印我感觉是真的还不错，建议人手一台，在这里我会更新我的3D打印作品）</p>
-        <hr />
-        <p>占位内容：当前为空。</p>
+ <div class="modal" id="modal-print" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-label="3D 打印">
+    <div class="modal-head">
+      <div class="modal-title">3D 打印</div>
+      <button class="icon-btn" type="button" data-close aria-label="关闭">×</button>
+    </div>
+    <div class="modal-body">
+      <p>这里会放入我和 3D 打印有关的内容。</p>
+      <p class="muted">
+        我把它分成两个方向：一个放作品，一个放文字。作品是做出来的东西，札记是过程里的想法、感受和记录，它们彼此有关，但不互相依赖。
+      </p>
+
+      <div class="print-grid">
+        <a class="print-entry" href="print-gallery.html">
+          <div class="print-entry-title">作品集</div>
+          <div class="print-entry-desc">照片、成品、模型记录。</div>
+        </a>
+
+        <div class="print-entry">
+          <div class="print-entry-title">打印札记</div>
+          <div class="print-entry-desc">感悟、经验和阶段性记录。</div>
+
+          <div class="print-links">
+            <p>
+              <a href="notes/2026-03-27-3d打印随想1.html">
+                2026-03-27｜3D 打印随想 1
+              </a>
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
-
+</div>
   <div class="modal" id="modal-notes" aria-hidden="true">
     <div class="modal-backdrop" data-close></div>
     <div class="modal-panel" role="dialog" aria-modal="true" aria-label="闲时笔谈">
