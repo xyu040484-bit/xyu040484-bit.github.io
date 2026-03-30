@@ -26,6 +26,7 @@ scatterPhotoScale: 0.9,
     },
     gesture: {
         stableMs: 140,
+        pinchStableMs: 220,
         openFromTreeMs: 320,
         focusLockMs: 1000,
         transitionLockMs: 420
@@ -219,6 +220,10 @@ function getPreviewSrc(item) {
     if (item.thumb) return item.thumb;
     const fileName = getFileName(item.src);
     return `${CONFIG.thumbsBasePath}${fileName}`;
+}
+
+function getLandmarkDistance(a, b) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
 function updatePhotoMeshTexture(mesh, texture, options = {}) {
@@ -624,21 +629,43 @@ function transitionTo(newState, focusIndex = -1) {
 // --- GESTURE DETECTION ---
 function detectGesture(landmarks) {
     const wrist = landmarks[0];
-    const middleTip = landmarks[12];
-    const distance = Math.sqrt(
-        Math.pow(middleTip.x - wrist.x, 2) +
-        Math.pow(middleTip.y - wrist.y, 2)
-    );
-
     const thumbTip = landmarks[4];
     const indexTip = landmarks[8];
-    const pinchDist = Math.sqrt(
-        Math.pow(thumbTip.x - indexTip.x, 2) +
-        Math.pow(thumbTip.y - indexTip.y, 2)
+    const middleTip = landmarks[12];
+    const ringTip = landmarks[16];
+    const pinkyTip = landmarks[20];
+    const palmCenter = landmarks[9];
+    const palmWidth = getLandmarkDistance(landmarks[5], landmarks[17]);
+    const handScale = Math.max(
+        getLandmarkDistance(wrist, palmCenter),
+        palmWidth * 0.6,
+        0.001
     );
 
-    if (pinchDist < 0.05) return 'PINCH';
-    if (distance < 0.25) return 'FIST';
+    const pinchRatio = getLandmarkDistance(thumbTip, indexTip) / handScale;
+    const indexReach = getLandmarkDistance(indexTip, wrist) / handScale;
+    const middleReach = getLandmarkDistance(middleTip, wrist) / handScale;
+    const ringReach = getLandmarkDistance(ringTip, wrist) / handScale;
+    const pinkyReach = getLandmarkDistance(pinkyTip, wrist) / handScale;
+
+    const curledCount = [indexReach, middleReach, ringReach, pinkyReach]
+        .filter(reach => reach < 1.18).length;
+
+    const isFist =
+        curledCount >= 3 &&
+        middleReach < 1.12 &&
+        ringReach < 1.06 &&
+        pinkyReach < 1.02;
+
+    if (isFist) return 'FIST';
+
+    const isPinch =
+        pinchRatio < 0.38 &&
+        indexReach > 0.85 &&
+        middleReach > 1.08 &&
+        ringReach > 0.92;
+
+    if (isPinch) return 'PINCH';
     return 'OPEN';
 }
 
@@ -657,10 +684,12 @@ function onResults(results) {
             STATE.lastGestureRawSince = now;
         }
 
-        const stableThreshold =
-            rawGesture === 'OPEN' && STATE.mode === 'TREE'
-                ? CONFIG.gesture.openFromTreeMs
-                : CONFIG.gesture.stableMs;
+        let stableThreshold = CONFIG.gesture.stableMs;
+        if (rawGesture === 'PINCH') {
+            stableThreshold = CONFIG.gesture.pinchStableMs;
+        } else if (rawGesture === 'OPEN' && STATE.mode === 'TREE') {
+            stableThreshold = CONFIG.gesture.openFromTreeMs;
+        }
 
         if (now - STATE.lastGestureRawSince >= stableThreshold) {
             STATE.stableGesture = rawGesture;
