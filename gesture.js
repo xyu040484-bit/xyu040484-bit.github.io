@@ -26,9 +26,11 @@ scatterPhotoScale: 0.9,
     },
     gesture: {
         stableMs: 140,
+        openFromTreeMs: 320,
+        focusLockMs: 1000,
         transitionLockMs: 420
     },
-    thumbsBasePath: 'data/photos/thumbs/'
+    thumbsBasePath: 'photos/thumbs/'
 };
 
 // --- STATE ---
@@ -66,6 +68,7 @@ let mouse = null;
 let ambientLight = null;
 let dirLight = null;
 let pointLight = null;
+let photoPlaceholderTexture = null;
 
 let resizeHandlerBound = false;
 let clickHandlerBound = false;
@@ -135,7 +138,7 @@ function disposeMaterial(material) {
         return;
     }
 
-    if (material.map) {
+    if (material.map && material.map !== photoPlaceholderTexture) {
         material.map.dispose();
     }
     material.dispose();
@@ -217,6 +220,85 @@ function getPreviewSrc(item) {
     if (item.thumb) return item.thumb;
     const fileName = getFileName(item.src);
     return `${CONFIG.thumbsBasePath}${fileName}`;
+}
+
+function getPhotoPlaceholderTexture() {
+    if (photoPlaceholderTexture) return photoPlaceholderTexture;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 1200;
+    canvas.height = 800;
+
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#0f172a');
+    gradient.addColorStop(1, '#1e293b');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.95)';
+    ctx.lineWidth = 28;
+    ctx.strokeRect(40, 40, canvas.width - 80, canvas.height - 80);
+
+    ctx.fillStyle = 'rgba(212, 175, 55, 0.18)';
+    ctx.fillRect(120, 160, canvas.width - 240, canvas.height - 300);
+
+    ctx.strokeStyle = '#d4af37';
+    ctx.lineWidth = 18;
+    ctx.strokeRect(180, 210, canvas.width - 360, canvas.height - 380);
+
+    ctx.beginPath();
+    ctx.arc(canvas.width * 0.7, canvas.height * 0.34, 42, 0, Math.PI * 2);
+    ctx.fillStyle = '#d4af37';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(220, 550);
+    ctx.lineTo(430, 360);
+    ctx.lineTo(590, 500);
+    ctx.lineTo(760, 320);
+    ctx.lineTo(980, 590);
+    ctx.lineTo(220, 590);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(212, 175, 55, 0.72)';
+    ctx.fill();
+
+    ctx.font = 'bold 64px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.fillText('LOADING', canvas.width / 2, canvas.height - 120);
+
+    photoPlaceholderTexture = new THREE.CanvasTexture(canvas);
+    return photoPlaceholderTexture;
+}
+
+function updatePhotoMeshTexture(mesh, texture, options = {}) {
+    const { updateGeometry = true } = options;
+    if (!mesh || !mesh.material || !texture) {
+        if (texture) texture.dispose();
+        return;
+    }
+
+    const oldMap = mesh.material.map;
+    mesh.material.map = texture;
+    mesh.material.color.setHex(0xd9d9d9);
+    mesh.material.needsUpdate = true;
+
+    const aspect = texture.image.width / texture.image.height;
+    if (updateGeometry && Math.abs(aspect - mesh.userData.aspect) > 0.001) {
+        const newGeo = new THREE.PlaneGeometry(CONFIG.photoScale * aspect, CONFIG.photoScale);
+        if (mesh.geometry) {
+            mesh.geometry.dispose();
+        }
+        mesh.geometry = newGeo;
+    }
+
+    mesh.userData.aspect = aspect;
+    mesh.userData.isPlaceholder = false;
+
+    if (oldMap && oldMap !== texture && oldMap !== photoPlaceholderTexture) {
+        oldMap.dispose();
+    }
 }
 
 // --- INIT 3D ---
@@ -374,6 +456,7 @@ async function loadPhotos() {
         const items = await res.json();
 
         clearPhotoMeshes();
+        items.forEach((item, index) => createPhotoMesh(null, index, item));
 
         const textureLoader = new THREE.TextureLoader();
 
@@ -392,7 +475,7 @@ async function loadPhotos() {
                                 return;
                             }
 
-                            createPhotoMesh(texture, index, item);
+                            updatePhotoMeshTexture(photoMeshes[index], texture);
                             resolve();
                         },
                         undefined,
@@ -408,7 +491,7 @@ async function loadPhotos() {
                                         return;
                                     }
 
-                                    createPhotoMesh(fallbackTexture, index, item);
+                                    updatePhotoMeshTexture(photoMeshes[index], fallbackTexture);
                                     resolve();
                                 },
                                 undefined,
@@ -441,22 +524,7 @@ async function loadPhotos() {
                         return;
                     }
 
-                    const oldMap = mesh.material.map;
-                    mesh.material.map = fullTexture;
-                    mesh.material.needsUpdate = true;
-
-                    const aspect = fullTexture.image.width / fullTexture.image.height;
-                    const newGeo = new THREE.PlaneGeometry(CONFIG.photoScale * aspect, CONFIG.photoScale);
-
-                    if (mesh.geometry) {
-                        mesh.geometry.dispose();
-                    }
-                    mesh.geometry = newGeo;
-                    mesh.userData.aspect = aspect;
-
-                    if (oldMap) {
-                        oldMap.dispose();
-                    }
+                    updatePhotoMeshTexture(mesh, fullTexture, { updateGeometry: false });
                 },
                 undefined,
                 (err) => {
@@ -472,15 +540,16 @@ async function loadPhotos() {
 }
 
 function createPhotoMesh(texture, index, itemData) {
-    const aspect = texture.image.width / texture.image.height;
+    const hasTexture = Boolean(texture && texture.image);
+    const aspect = hasTexture ? texture.image.width / texture.image.height : 1.5;
     const geo = new THREE.PlaneGeometry(CONFIG.photoScale * aspect, CONFIG.photoScale);
 
     const mat = new THREE.MeshBasicMaterial({
-        map: texture,
+        map: hasTexture ? texture : getPhotoPlaceholderTexture(),
         side: THREE.DoubleSide,
         transparent: true,
         fog: false,
-        color: 0xd9d9d9
+        color: hasTexture ? 0xd9d9d9 : 0xffffff
     });
 
     const mesh = new THREE.Mesh(geo, mat);
@@ -504,6 +573,7 @@ const scatterPos = {
         treePos,
         scatterPos,
         isPhoto: true,
+        isPlaceholder: !hasTexture,
         originalScale: new THREE.Vector3(1, 1, 1),
         desc: itemData.desc,
         aspect: aspect
@@ -642,7 +712,12 @@ function onResults(results) {
             STATE.lastGestureRawSince = now;
         }
 
-        if (now - STATE.lastGestureRawSince >= CONFIG.gesture.stableMs) {
+        const stableThreshold =
+            rawGesture === 'OPEN' && STATE.mode === 'TREE'
+                ? CONFIG.gesture.openFromTreeMs
+                : CONFIG.gesture.stableMs;
+
+        if (now - STATE.lastGestureRawSince >= stableThreshold) {
             STATE.stableGesture = rawGesture;
         }
 
@@ -686,20 +761,20 @@ function onResults(results) {
             raycaster.setFromCamera(handCursor, camera);
             const intersects = raycaster.intersectObjects(photoMeshes);
 
-            if (STATE.mode === 'SCATTER') {
+            if (STATE.mode === 'TREE' || STATE.mode === 'SCATTER') {
                 if (intersects.length > 0) {
                     const targetMesh = intersects[0].object;
                     const idx = photoMeshes.indexOf(targetMesh);
 
                     if (STATE.focusedPhotoIndex !== idx) {
                         transitionTo('FOCUS', idx);
-                        STATE.transitionLockUntil = now + 260;
+                        STATE.transitionLockUntil = now + CONFIG.gesture.focusLockMs;
                     }
                 } else {
                     const bestIdx = findBestPhotoToFocus();
                     if (bestIdx !== -1 && STATE.focusedPhotoIndex !== bestIdx) {
                         transitionTo('FOCUS', bestIdx);
-                        STATE.transitionLockUntil = now + 260;
+                        STATE.transitionLockUntil = now + CONFIG.gesture.focusLockMs;
                     }
                 }
             } else if (STATE.mode === 'FOCUS') {
@@ -709,7 +784,7 @@ function onResults(results) {
 
                     if (STATE.focusedPhotoIndex !== idx) {
                         transitionTo('FOCUS', idx);
-                        STATE.transitionLockUntil = now + 260;
+                        STATE.transitionLockUntil = now + CONFIG.gesture.focusLockMs;
                     }
                 }
             }
@@ -916,6 +991,11 @@ function disposeThree() {
 
     clearPhotoMeshes();
     clearNonPhotoOrnaments();
+
+    if (photoPlaceholderTexture) {
+        photoPlaceholderTexture.dispose();
+        photoPlaceholderTexture = null;
+    }
 
     if (controlsOrbit) {
         controlsOrbit.dispose();
