@@ -533,6 +533,7 @@ function transitionTo(newState, focusIndex = -1) {
     ornaments.forEach(mesh => {
         let target = mesh.position.clone();
         let targetScale = mesh.userData.originalScale;
+        let positionDuration = 1300;
         let scaleDuration = 480;
         let scaleEasing = TWEEN.Easing.Cubic.InOut;
 
@@ -572,8 +573,8 @@ function transitionTo(newState, focusIndex = -1) {
                 };
 
                 targetScale = getPhotoScaleByMode('FOCUS', true);
-                scaleDuration = 650;
-                scaleEasing = TWEEN.Easing.Cubic.Out;
+                scaleDuration = positionDuration;
+                scaleEasing = TWEEN.Easing.Exponential.InOut;
 
                 mesh.lookAt(camera.position);
                 statusText.innerText = mesh.userData.desc || '查看照片';
@@ -593,7 +594,7 @@ function transitionTo(newState, focusIndex = -1) {
         }
 
         new TWEEN.Tween(mesh.position)
-            .to(target, 1300)
+            .to(target, positionDuration)
             .easing(TWEEN.Easing.Exponential.InOut)
             .start();
 

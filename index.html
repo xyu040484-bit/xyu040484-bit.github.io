@@ -241,6 +241,28 @@
     <div id="gesture-loading">INITIALIZING...</div>
   </div>
 
+  <script src="data/photos.js"></script>
+  <script>
+    (function () {
+      if (location.protocol !== "file:" || !Array.isArray(window.PHOTO_DATA)) return;
+      const nativeFetch = window.fetch ? window.fetch.bind(window) : null;
+      window.fetch = function (input, init) {
+        var url = typeof input === "string" ? input : (input && input.url) || "";
+        if (url && /(^|\/)data\/photos\.json(\?|#|$)/.test(url)) {
+          return Promise.resolve(
+            new Response(JSON.stringify(window.PHOTO_DATA), {
+              status: 200,
+              headers: { "Content-Type": "application/json" }
+            })
+          );
+        }
+        if (!nativeFetch) {
+          return Promise.reject(new Error("Fetch is not available in this browser."));
+        }
+        return nativeFetch(input, init);
+      };
+    })();
+  </script>
   <script src="script.js"></script>
   <script type="module" src="gesture.js"></script>
 </body>
