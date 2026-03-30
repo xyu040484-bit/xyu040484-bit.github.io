@@ -68,7 +68,6 @@ let mouse = null;
 let ambientLight = null;
 let dirLight = null;
 let pointLight = null;
-let photoPlaceholderTexture = null;
 
 let resizeHandlerBound = false;
 let clickHandlerBound = false;
@@ -138,7 +137,7 @@ function disposeMaterial(material) {
         return;
     }
 
-    if (material.map && material.map !== photoPlaceholderTexture) {
+    if (material.map) {
         material.map.dispose();
     }
     material.dispose();
@@ -222,56 +221,6 @@ function getPreviewSrc(item) {
     return `${CONFIG.thumbsBasePath}${fileName}`;
 }
 
-function getPhotoPlaceholderTexture() {
-    if (photoPlaceholderTexture) return photoPlaceholderTexture;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = 1200;
-    canvas.height = 800;
-
-    const ctx = canvas.getContext('2d');
-    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    gradient.addColorStop(0, '#0f172a');
-    gradient.addColorStop(1, '#1e293b');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.strokeStyle = 'rgba(212, 175, 55, 0.95)';
-    ctx.lineWidth = 28;
-    ctx.strokeRect(40, 40, canvas.width - 80, canvas.height - 80);
-
-    ctx.fillStyle = 'rgba(212, 175, 55, 0.18)';
-    ctx.fillRect(120, 160, canvas.width - 240, canvas.height - 300);
-
-    ctx.strokeStyle = '#d4af37';
-    ctx.lineWidth = 18;
-    ctx.strokeRect(180, 210, canvas.width - 360, canvas.height - 380);
-
-    ctx.beginPath();
-    ctx.arc(canvas.width * 0.7, canvas.height * 0.34, 42, 0, Math.PI * 2);
-    ctx.fillStyle = '#d4af37';
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.moveTo(220, 550);
-    ctx.lineTo(430, 360);
-    ctx.lineTo(590, 500);
-    ctx.lineTo(760, 320);
-    ctx.lineTo(980, 590);
-    ctx.lineTo(220, 590);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(212, 175, 55, 0.72)';
-    ctx.fill();
-
-    ctx.font = 'bold 64px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.fillText('LOADING', canvas.width / 2, canvas.height - 120);
-
-    photoPlaceholderTexture = new THREE.CanvasTexture(canvas);
-    return photoPlaceholderTexture;
-}
-
 function updatePhotoMeshTexture(mesh, texture, options = {}) {
     const { updateGeometry = true } = options;
     if (!mesh || !mesh.material || !texture) {
@@ -294,9 +243,8 @@ function updatePhotoMeshTexture(mesh, texture, options = {}) {
     }
 
     mesh.userData.aspect = aspect;
-    mesh.userData.isPlaceholder = false;
 
-    if (oldMap && oldMap !== texture && oldMap !== photoPlaceholderTexture) {
+    if (oldMap && oldMap !== texture) {
         oldMap.dispose();
     }
 }
@@ -456,7 +404,6 @@ async function loadPhotos() {
         const items = await res.json();
 
         clearPhotoMeshes();
-        items.forEach((item, index) => createPhotoMesh(null, index, item));
 
         const textureLoader = new THREE.TextureLoader();
 
@@ -475,7 +422,7 @@ async function loadPhotos() {
                                 return;
                             }
 
-                            updatePhotoMeshTexture(photoMeshes[index], texture);
+                            createPhotoMesh(texture, index, item);
                             resolve();
                         },
                         undefined,
@@ -491,7 +438,7 @@ async function loadPhotos() {
                                         return;
                                     }
 
-                                    updatePhotoMeshTexture(photoMeshes[index], fallbackTexture);
+                                    createPhotoMesh(fallbackTexture, index, item);
                                     resolve();
                                 },
                                 undefined,
@@ -540,16 +487,15 @@ async function loadPhotos() {
 }
 
 function createPhotoMesh(texture, index, itemData) {
-    const hasTexture = Boolean(texture && texture.image);
-    const aspect = hasTexture ? texture.image.width / texture.image.height : 1.5;
+    const aspect = texture.image.width / texture.image.height;
     const geo = new THREE.PlaneGeometry(CONFIG.photoScale * aspect, CONFIG.photoScale);
 
     const mat = new THREE.MeshBasicMaterial({
-        map: hasTexture ? texture : getPhotoPlaceholderTexture(),
+        map: texture,
         side: THREE.DoubleSide,
         transparent: true,
         fog: false,
-        color: hasTexture ? 0xd9d9d9 : 0xffffff
+        color: 0xd9d9d9
     });
 
     const mesh = new THREE.Mesh(geo, mat);
@@ -573,7 +519,6 @@ const scatterPos = {
         treePos,
         scatterPos,
         isPhoto: true,
-        isPlaceholder: !hasTexture,
         originalScale: new THREE.Vector3(1, 1, 1),
         desc: itemData.desc,
         aspect: aspect
@@ -587,7 +532,7 @@ const scatterPos = {
 
     scene.add(mesh);
     ornaments.push(mesh);
-    photoMeshes.push(mesh);
+    photoMeshes[index] = mesh;
 }
 
 // --- STATE TRANSITION ---
@@ -991,11 +936,6 @@ function disposeThree() {
 
     clearPhotoMeshes();
     clearNonPhotoOrnaments();
-
-    if (photoPlaceholderTexture) {
-        photoPlaceholderTexture.dispose();
-        photoPlaceholderTexture = null;
-    }
 
     if (controlsOrbit) {
         controlsOrbit.dispose();
