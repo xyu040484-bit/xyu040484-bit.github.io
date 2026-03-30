@@ -38,6 +38,9 @@ scatterPhotoScale: 0.9,
 const STATE = {
     active: false,
     inputMode: 'GESTURE',
+    readyForInput: false,
+    photosReady: false,
+    pipelineReady: false,
     mode: 'TREE',
     handPresent: false,
     rotationTarget: { x: 0, y: 0 },
@@ -99,6 +102,9 @@ function resetGestureStabilizer() {
 
 function resetStateForOpen() {
     STATE.active = true;
+    STATE.readyForInput = false;
+    STATE.photosReady = false;
+    STATE.pipelineReady = false;
     STATE.mode = 'TREE';
     STATE.handPresent = false;
     STATE.focusedPhotoIndex = -1;
@@ -110,6 +116,7 @@ function resetStateForOpen() {
 function resetUIForOpen() {
     overlay.style.display = 'block';
     loader.style.display = 'block';
+    loader.textContent = 'INITIALIZING...';
     document.body.style.overflow = 'hidden';
     statusText.style.color = '#fff';
 
@@ -252,6 +259,12 @@ function updatePhotoMeshTexture(mesh, texture, options = {}) {
     if (oldMap && oldMap !== texture) {
         oldMap.dispose();
     }
+}
+
+function syncLoaderWithReadiness() {
+    const ready = STATE.active && STATE.photosReady && STATE.pipelineReady;
+    STATE.readyForInput = ready;
+    loader.style.display = ready ? 'none' : 'block';
 }
 
 // --- INIT 3D ---
@@ -458,7 +471,8 @@ async function loadPhotos() {
             })
         );
 
-        loader.style.display = 'none';
+        STATE.photosReady = true;
+        syncLoaderWithReadiness();
 
         // 后台替换原图
         items.forEach((item, index) => {
@@ -486,8 +500,9 @@ async function loadPhotos() {
         });
     } catch (err) {
         console.error(err);
+        STATE.photosReady = true;
+        syncLoaderWithReadiness();
         statusText.innerText = '照片加载失败';
-        loader.style.display = 'none';
     }
 }
 
@@ -670,7 +685,14 @@ function detectGesture(landmarks) {
 }
 
 function onResults(results) {
-    if (!STATE.active || STATE.inputMode === 'MOUSE') return;
+    if (!STATE.active) return;
+
+    if (!STATE.pipelineReady) {
+        STATE.pipelineReady = true;
+        syncLoaderWithReadiness();
+    }
+
+    if (STATE.inputMode === 'MOUSE') return;
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         STATE.handPresent = true;
@@ -693,6 +715,10 @@ function onResults(results) {
 
         if (now - STATE.lastGestureRawSince >= stableThreshold) {
             STATE.stableGesture = rawGesture;
+        }
+
+        if (!STATE.readyForInput) {
+            return;
         }
 
         if (STATE.mode !== 'FOCUS') {
@@ -735,7 +761,7 @@ function onResults(results) {
             raycaster.setFromCamera(handCursor, camera);
             const intersects = raycaster.intersectObjects(photoMeshes);
 
-            if (STATE.mode === 'TREE' || STATE.mode === 'SCATTER') {
+            if (STATE.mode === 'SCATTER') {
                 if (intersects.length > 0) {
                     const targetMesh = intersects[0].object;
                     const idx = photoMeshes.indexOf(targetMesh);
@@ -834,7 +860,7 @@ function toggleInputMode() {
 }
 
 function onDocumentClick(event) {
-    if (STATE.inputMode !== 'MOUSE' || !STATE.active || !camera || !raycaster) return;
+    if (STATE.inputMode !== 'MOUSE' || !STATE.active || !STATE.readyForInput || !camera || !raycaster) return;
     if (event.target.closest('#controls') || event.target.closest('#ui-layer button')) return;
 
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -843,7 +869,7 @@ function onDocumentClick(event) {
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(photoMeshes);
 
-    if (intersects.length > 0) {
+    if (intersects.length > 0 && STATE.mode === 'SCATTER') {
         const selected = intersects[0].object;
         const idx = photoMeshes.indexOf(selected);
         transitionTo('FOCUS', idx);
@@ -1013,14 +1039,18 @@ async function startGestureSystem() {
 
     loadPhotos().catch(err => {
         console.error('照片加载失败：', err);
+        STATE.photosReady = true;
+        syncLoaderWithReadiness();
         statusText.innerText = '照片加载失败，但手势系统已启动';
-        loader.style.display = 'none';
     });
 }
 
 function stopGestureSystem() {
     overlay.style.display = 'none';
     STATE.active = false;
+    STATE.readyForInput = false;
+    STATE.photosReady = false;
+    STATE.pipelineReady = false;
     document.body.style.overflow = '';
     statusText.style.color = '#fff';
 
