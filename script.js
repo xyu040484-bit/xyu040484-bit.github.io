@@ -29,17 +29,41 @@
   function setupHeroReplayOnEnter() {
     const splash = qs("#intro-splash");
     const hasSeen = sessionStorage.getItem("hasSeenIntro");
+    const snap = qs("#snap");
+    const preventIntroScroll = (e) => e.preventDefault();
+
+    function setIntroLocked(locked) {
+      document.body.classList.toggle("intro-lock", locked);
+      if (snap) snap.scrollTop = 0;
+    }
+
+    function cleanupSplash() {
+      if (splash) {
+        splash.removeEventListener("wheel", preventIntroScroll);
+        splash.removeEventListener("touchmove", preventIntroScroll);
+        splash.remove();
+      }
+      setIntroLocked(false);
+    }
+
+    if (splash) {
+      splash.addEventListener("wheel", preventIntroScroll, { passive: false });
+      splash.addEventListener("touchmove", preventIntroScroll, { passive: false });
+    }
 
     if (hasSeen) {
       // ✅ 已看过：移除开屏，直接亮条
-      if (splash) splash.remove();
+      cleanupSplash();
       playHeroAnim();
     } else {
+      setIntroLocked(true);
       // ✅ 第一次：开屏 -> 淡出 -> 亮条
       setTimeout(() => {
         if (splash) {
           splash.classList.add("fade-out");
-          setTimeout(() => splash.remove(), 600);
+          setTimeout(cleanupSplash, 600);
+        } else {
+          setIntroLocked(false);
         }
         playHeroAnim();
         sessionStorage.setItem("hasSeenIntro", "true");
