@@ -17,8 +17,8 @@ const CONFIG = {
     treeRadius: 25,
     scatterRadius: 80,
     photoScale: 6,
-   treePhotoScale: 0.58,
-scatterPhotoScale: 0.9,
+    treePhotoScale: 0.58,
+    scatterPhotoScale: 0.9,
     focus: {
         mobileDist: 22,
         pcDist: 20,
@@ -233,6 +233,10 @@ function getLandmarkDistance(a, b) {
     return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
+function getLoadedPhotoMeshes() {
+    return photoMeshes.filter(Boolean);
+}
+
 function updatePhotoMeshTexture(mesh, texture, options = {}) {
     const { updateGeometry = true } = options;
     if (!mesh || !mesh.material || !texture) {
@@ -264,6 +268,15 @@ function updatePhotoMeshTexture(mesh, texture, options = {}) {
 function syncLoaderWithReadiness() {
     const ready = STATE.active && STATE.photosReady && STATE.pipelineReady;
     STATE.readyForInput = ready;
+    if (!ready) {
+        if (!STATE.pipelineReady && !STATE.photosReady) {
+            loader.textContent = 'INITIALIZING...';
+        } else if (!STATE.pipelineReady) {
+            loader.textContent = 'WAITING FOR CAMERA...';
+        } else if (!STATE.photosReady) {
+            loader.textContent = 'LOADING PHOTOS...';
+        }
+    }
     loader.style.display = ready ? 'none' : 'block';
 }
 
@@ -507,6 +520,14 @@ async function loadPhotos() {
 }
 
 function createPhotoMesh(texture, index, itemData) {
+    const existingMesh = photoMeshes[index];
+    if (existingMesh) {
+        if (scene) scene.remove(existingMesh);
+        if (existingMesh.geometry) existingMesh.geometry.dispose();
+        if (existingMesh.material) disposeMaterial(existingMesh.material);
+        ornaments = ornaments.filter(mesh => mesh !== existingMesh);
+    }
+
     const aspect = texture.image.width / texture.image.height;
     const geo = new THREE.PlaneGeometry(CONFIG.photoScale * aspect, CONFIG.photoScale);
 
@@ -759,7 +780,7 @@ function onResults(results) {
             };
 
             raycaster.setFromCamera(handCursor, camera);
-            const intersects = raycaster.intersectObjects(photoMeshes);
+            const intersects = raycaster.intersectObjects(getLoadedPhotoMeshes());
 
             if (STATE.mode === 'SCATTER') {
                 if (intersects.length > 0) {
@@ -798,16 +819,17 @@ function onResults(results) {
 }
 
 function findBestPhotoToFocus() {
-    if (!photoMeshes.length || !camera) return -1;
+    const loadedMeshes = getLoadedPhotoMeshes();
+    if (!loadedMeshes.length || !camera) return -1;
 
     const centerDir = new THREE.Vector3();
     camera.getWorldDirection(centerDir);
 
-    const candidates = photoMeshes.map((mesh, index) => {
+    const candidates = loadedMeshes.map((mesh) => {
         const meshPos = mesh.position.clone();
         const dirToMesh = meshPos.sub(camera.position).normalize();
         const angle = centerDir.angleTo(dirToMesh);
-        return { index, angle };
+        return { index: photoMeshes.indexOf(mesh), angle };
     });
 
     candidates.sort((a, b) => a.angle - b.angle);
@@ -867,7 +889,7 @@ function onDocumentClick(event) {
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
     raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(photoMeshes);
+    const intersects = raycaster.intersectObjects(getLoadedPhotoMeshes());
 
     if (intersects.length > 0 && STATE.mode === 'SCATTER') {
         const selected = intersects[0].object;
@@ -1037,12 +1059,7 @@ async function startGestureSystem() {
     }
     animate();
 
-    loadPhotos().catch(err => {
-        console.error('照片加载失败：', err);
-        STATE.photosReady = true;
-        syncLoaderWithReadiness();
-        statusText.innerText = '照片加载失败，但手势系统已启动';
-    });
+    loadPhotos();
 }
 
 function stopGestureSystem() {
