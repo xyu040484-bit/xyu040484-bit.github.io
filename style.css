@@ -35,6 +35,8 @@ html{ scroll-behavior: smooth; }
   --bg-fade-ms: 1100ms;
   --top-a: #22c55e;
   --top-b: #fb7185;
+  --lift-fast: transform 180ms ease, box-shadow 180ms ease;
+  --lift-mid: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
 }
 
 body{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; color: #111; background: var(--bg); }
@@ -133,7 +135,7 @@ body.hero-anim .gpt-mark .strip {
    6. 爱好板块 (Hobbies)
    ========================= */
 .grid2{ margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.tile{ appearance: none; border: 1px solid var(--border); background: #fff; border-radius: 16px; padding: 18px 16px; text-align: left; cursor: pointer; box-shadow: 0 10px 24px rgba(0,0,0,0.08); transition: transform 180ms ease, box-shadow 180ms ease; touch-action: manipulation; }
+.tile{ appearance: none; border: 1px solid var(--border); background: #fff; border-radius: 16px; padding: 18px 16px; text-align: left; cursor: pointer; box-shadow: 0 10px 24px rgba(0,0,0,0.08); transition: var(--lift-fast); touch-action: manipulation; }
 .tile:hover{ transform: translateY(-2px); box-shadow: 0 14px 30px rgba(0,0,0,0.12); }
 .tile-title{ font-size: 18px; font-weight: 800; margin-bottom: 6px; }
 .tile-desc{ font-size: 13px; color:#666; }
@@ -182,9 +184,9 @@ body.hero-anim .gpt-mark .strip {
 .modal-body{ padding: 14px 16px 18px; flex: 1; overflow-y: auto; }
 
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px; margin-top: 20px; }
-.photo-card { aspect-ratio: 1; background: #f3f4f6; border-radius: 12px; overflow: hidden; cursor: zoom-in; position: relative; transition: transform 0.2s; }
+.photo-card { aspect-ratio: 1; background: #f3f4f6; border-radius: 12px; overflow: hidden; cursor: zoom-in; position: relative; transition: transform 0.2s; contain: layout paint; }
 .photo-card:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
-.photo-card img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s; }
+.photo-card img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s; display:block; }
 .photo-card:hover img { transform: scale(1.05); }
 
 /* Lightbox */
@@ -297,7 +299,7 @@ body.hero-anim .gpt-mark .strip {
   border:1px solid rgba(0,0,0,0.06);
   color:#111;
   text-decoration:none;
-  transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  transition:var(--lift-mid);
 }
 
 .print-entry:hover{

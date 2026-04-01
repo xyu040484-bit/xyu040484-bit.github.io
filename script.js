@@ -6,6 +6,13 @@
   // =========================
   function qs(sel, root) { return (root || document).querySelector(sel); }
   function qsa(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
+  const loadPhotoItems = () => {
+    if (typeof window.loadPhotoItems === "function") return window.loadPhotoItems();
+    return fetch("data/photos.json").then((res) => {
+      if (!res.ok) throw new Error("Failed to load photo data.");
+      return res.json();
+    });
+  };
 
   // =========================
   // 1. 核心动画控制 (亮条 + 开场)
@@ -372,6 +379,8 @@
   // 7. Modal Control
   // =========================
   let seasonFxRef = null;
+  let galleryItemsCache = null;
+  let galleryBound = false;
 
   function openModal(modal) {
     if (!modal) return;
@@ -502,16 +511,15 @@
   // =========================
   // 8. 摄影画廊 (Thumb 优先)
   // =========================
-  async function renderPhotoGallery() {
+  async function renderPhotoGalleryLegacy() {
     const host = qs("#gallery-modal");
     if (!host) return; 
+    if (galleryItemsCache && host.children.length) return;
 
     host.innerHTML = '<p class="muted">正在加载照片...</p>';
 
     try {
-      const res = await fetch("data/photos.json");
-      if (!res.ok) throw new Error("加载失败");
-      const items = await res.json();
+      const items = await loadPhotoItems();
       
       if (!items.length) {
         host.innerHTML = '<p class="muted">暂无照片</p>';
@@ -538,7 +546,7 @@
     }
   }
 
-  function openLightbox(item) {
+  function openLightboxLegacy(item) {
     const modal = qs("#modal-photo-view");
     if (!modal) return;
     
@@ -558,6 +566,62 @@
   // =========================
   // 9. 启动入口
   // =========================
+  async function renderPhotoGallery() {
+    const host = qs("#gallery-modal");
+    if (!host) return;
+    if (galleryItemsCache && host.children.length) return;
+
+    host.innerHTML = '<p class="muted">Loading photos...</p>';
+
+    try {
+      const items = await loadPhotoItems();
+      galleryItemsCache = items;
+
+      if (!items.length) {
+        host.innerHTML = '<p class="muted">No photos yet.</p>';
+        return;
+      }
+
+      host.innerHTML = items.map((item, idx) => `
+        <div class="photo-card" data-idx="${idx}">
+          <img src="${item.thumb || item.src}" loading="lazy" decoding="async" alt="${item.title || ''}" />
+        </div>
+      `).join("");
+
+      if (!galleryBound) {
+        host.addEventListener("click", (e) => {
+          const card = e.target.closest(".photo-card");
+          if (!card || !galleryItemsCache) return;
+          openLightbox(galleryItemsCache[Number(card.dataset.idx)]);
+        });
+        galleryBound = true;
+      }
+    } catch (e) {
+      console.error(e);
+      host.innerHTML = '<p class="muted">Failed to load photos. Check data/photos.json.</p>';
+    }
+  }
+
+  function openLightbox(item) {
+    const modal = qs("#modal-photo-view");
+    if (!modal) return;
+    
+    const img = qs("#photo-view-img", modal);
+    const title = qs("#photo-view-title", modal);
+    const date = qs("#photo-view-date", modal);
+    const desc = qs("#photo-view-desc", modal);
+
+    if (img) {
+      img.decoding = "async";
+      img.src = item.src;
+    }
+    if (title) title.textContent = item.title || "";
+    if (date) date.textContent = item.date || "";
+    if (desc) desc.textContent = item.desc || "";
+    
+    if(typeof openModal === 'function') openModal(modal);
+  }
+
   function init() {
     setupNoBlueSelectionOnTap();
     setupHeroReplayOnEnter();
@@ -569,7 +633,7 @@
     setupCenterWheelScroll();
     setupWheelPaging();
     
-    renderPhotoGallery(); 
+    renderPhotoGallery();
   }
 
   if (document.readyState === "loading") {

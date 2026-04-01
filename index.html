@@ -244,20 +244,44 @@
   <script src="data/photos.js"></script>
   <script>
     (function () {
-      if (location.protocol !== "file:" || !Array.isArray(window.PHOTO_DATA)) return;
       const nativeFetch = window.fetch ? window.fetch.bind(window) : null;
+      let cachedItems = Array.isArray(window.PHOTO_DATA) ? window.PHOTO_DATA : null;
+      let pendingPhotoLoad = null;
+
+      window.loadPhotoItems = function () {
+        if (cachedItems) return Promise.resolve(cachedItems);
+        if (pendingPhotoLoad) return pendingPhotoLoad;
+        if (!nativeFetch) {
+          return Promise.reject(new Error("Fetch is not available in this browser."));
+        }
+
+        pendingPhotoLoad = nativeFetch("data/photos.json")
+          .then(function (res) {
+            if (!res.ok) throw new Error("Failed to load photo data.");
+            return res.json();
+          })
+          .then(function (items) {
+            cachedItems = Array.isArray(items) ? items : [];
+            return cachedItems;
+          })
+          .finally(function () {
+            pendingPhotoLoad = null;
+          });
+
+        return pendingPhotoLoad;
+      };
+
+      if (location.protocol !== "file:" || !cachedItems || !nativeFetch) return;
+
       window.fetch = function (input, init) {
         var url = typeof input === "string" ? input : (input && input.url) || "";
         if (url && /(^|\/)data\/photos\.json(\?|#|$)/.test(url)) {
           return Promise.resolve(
-            new Response(JSON.stringify(window.PHOTO_DATA), {
+            new Response(JSON.stringify(cachedItems), {
               status: 200,
               headers: { "Content-Type": "application/json" }
             })
           );
-        }
-        if (!nativeFetch) {
-          return Promise.reject(new Error("Fetch is not available in this browser."));
         }
         return nativeFetch(input, init);
       };

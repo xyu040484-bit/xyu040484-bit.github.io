@@ -85,6 +85,13 @@ const videoElement = document.getElementById('video-input');
 const gestureGuide = document.getElementById('gesture-guide');
 const mouseControls = document.getElementById('mouse-controls');
 const btnInputMode = document.getElementById('btn-input-mode');
+const loadPhotoItems = () => {
+    if (typeof window.loadPhotoItems === 'function') return window.loadPhotoItems();
+    return fetch('data/photos.json').then((res) => {
+        if (!res.ok) throw new Error('Fetch failed');
+        return res.json();
+    });
+};
 
 // --- HELPERS ---
 function clearAllTweens() {
@@ -427,12 +434,7 @@ async function loadPhotos() {
     try {
         loader.style.display = 'block';
 
-        const res = await fetch('data/photos.json');
-        if (!res.ok) {
-            throw new Error('Fetch failed');
-        }
-
-        const items = await res.json();
+        const items = await loadPhotoItems();
 
         clearPhotoMeshes();
 
@@ -541,21 +543,21 @@ function createPhotoMesh(texture, index, itemData) {
 
     const mesh = new THREE.Mesh(geo, mat);
 
-const theta = index * 1.35;
-const y = -8 + (index % 10) * 3.2;
-const r = 10 + Math.random() * 5;
+    const theta = index * 1.35;
+    const y = -8 + (index % 10) * 3.2;
+    const r = 10 + Math.random() * 5;
 
-const treePos = {
-    x: Math.cos(theta) * r,
-    y: y,
-    z: Math.sin(theta) * r
-};
+    const treePos = {
+        x: Math.cos(theta) * r,
+        y: y,
+        z: Math.sin(theta) * r
+    };
 
-const scatterPos = {
-    x: (Math.random() - 0.5) * 80,
-    y: (Math.random() - 0.5) * 18,
-    z: (Math.random() - 0.5) * 40 + 20
-};
+    const scatterPos = {
+        x: (Math.random() - 0.5) * 80,
+        y: (Math.random() - 0.5) * 18,
+        z: (Math.random() - 0.5) * 40 + 20
+    };
     mesh.userData = {
         treePos,
         scatterPos,
