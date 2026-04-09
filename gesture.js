@@ -92,6 +92,18 @@ const loadPhotoItems = () => {
         return res.json();
     });
 };
+const PHOTO_SCALES = {
+    FOCUS: new THREE.Vector3(CONFIG.focus.scale, CONFIG.focus.scale, CONFIG.focus.scale),
+    TREE: new THREE.Vector3(CONFIG.treePhotoScale, CONFIG.treePhotoScale, CONFIG.treePhotoScale),
+    SCATTER: new THREE.Vector3(CONFIG.scatterPhotoScale, CONFIG.scatterPhotoScale, CONFIG.scatterPhotoScale),
+    HIDDEN: new THREE.Vector3(0, 0, 0)
+};
+const TEMP_VECTORS = {
+    cameraDir: new THREE.Vector3(),
+    centerDir: new THREE.Vector3(),
+    dirToMesh: new THREE.Vector3()
+};
+const loadedPhotoMeshesBuffer = [];
 
 // --- HELPERS ---
 function clearAllTweens() {
@@ -160,18 +172,18 @@ function disposeMaterial(material) {
 
 function getPhotoScaleByMode(mode, isFocused = false) {
     if (isFocused) {
-        return new THREE.Vector3(CONFIG.focus.scale, CONFIG.focus.scale, CONFIG.focus.scale);
+        return PHOTO_SCALES.FOCUS;
     }
 
     if (mode === 'TREE') {
-        return new THREE.Vector3(CONFIG.treePhotoScale, CONFIG.treePhotoScale, CONFIG.treePhotoScale);
+        return PHOTO_SCALES.TREE;
     }
 
     if (mode === 'SCATTER') {
-        return new THREE.Vector3(CONFIG.scatterPhotoScale, CONFIG.scatterPhotoScale, CONFIG.scatterPhotoScale);
+        return PHOTO_SCALES.SCATTER;
     }
 
-    return new THREE.Vector3(0, 0, 0);
+    return PHOTO_SCALES.HIDDEN;
 }
 
 function clearPhotoMeshes() {
@@ -241,7 +253,17 @@ function getLandmarkDistance(a, b) {
 }
 
 function getLoadedPhotoMeshes() {
-    return photoMeshes.filter(Boolean);
+    loadedPhotoMeshesBuffer.length = 0;
+    for (let i = 0; i < photoMeshes.length; i++) {
+        if (photoMeshes[i]) loadedPhotoMeshesBuffer.push(photoMeshes[i]);
+    }
+    return loadedPhotoMeshesBuffer;
+}
+
+function getPhotoIndex(mesh) {
+    if (!mesh) return -1;
+    if (typeof mesh.userData?.photoIndex === 'number') return mesh.userData.photoIndex;
+    return photoMeshes.indexOf(mesh);
 }
 
 function updatePhotoMeshTexture(mesh, texture, options = {}) {
@@ -562,6 +584,7 @@ function createPhotoMesh(texture, index, itemData) {
         treePos,
         scatterPos,
         isPhoto: true,
+        photoIndex: index,
         originalScale: new THREE.Vector3(1, 1, 1),
         desc: itemData.desc,
         aspect: aspect
@@ -607,8 +630,8 @@ function transitionTo(newState, focusIndex = -1) {
                 targetScale = getPhotoScaleByMode('SCATTER');
             }
         } else if (newState === 'FOCUS') {
-            if (photoMeshes.indexOf(mesh) === focusIndex) {
-                const camDir = new THREE.Vector3();
+            if (getPhotoIndex(mesh) === focusIndex) {
+                const camDir = TEMP_VECTORS.cameraDir;
                 camera.getWorldDirection(camDir);
 
                 const screenAspect = window.innerWidth / window.innerHeight;
@@ -643,7 +666,7 @@ function transitionTo(newState, focusIndex = -1) {
                 };
 
                 if (mesh.userData.isPhoto) {
-                    targetScale = new THREE.Vector3(0, 0, 0);
+                    targetScale = PHOTO_SCALES.HIDDEN;
                     scaleDuration = 380;
                     scaleEasing = TWEEN.Easing.Cubic.Out;
                 }
@@ -787,7 +810,7 @@ function onResults(results) {
             if (STATE.mode === 'SCATTER') {
                 if (intersects.length > 0) {
                     const targetMesh = intersects[0].object;
-                    const idx = photoMeshes.indexOf(targetMesh);
+                    const idx = getPhotoIndex(targetMesh);
 
                     if (STATE.focusedPhotoIndex !== idx) {
                         transitionTo('FOCUS', idx);
@@ -803,7 +826,7 @@ function onResults(results) {
             } else if (STATE.mode === 'FOCUS') {
                 if (intersects.length > 0) {
                     const targetMesh = intersects[0].object;
-                    const idx = photoMeshes.indexOf(targetMesh);
+                    const idx = getPhotoIndex(targetMesh);
 
                     if (STATE.focusedPhotoIndex !== idx) {
                         transitionTo('FOCUS', idx);
@@ -821,35 +844,46 @@ function onResults(results) {
 }
 
 function findBestPhotoToFocus() {
-    const loadedMeshes = getLoadedPhotoMeshes();
-    if (!loadedMeshes.length || !camera) return -1;
+    if (!camera) return -1;
 
-    const centerDir = new THREE.Vector3();
+    const centerDir = TEMP_VECTORS.centerDir;
+    const dirToMesh = TEMP_VECTORS.dirToMesh;
     camera.getWorldDirection(centerDir);
 
-    const candidates = loadedMeshes.map((mesh) => {
-        const meshPos = mesh.position.clone();
-        const dirToMesh = meshPos.sub(camera.position).normalize();
+    let bestIndex = -1;
+    let bestAngle = Infinity;
+    let fallbackIndex = -1;
+    let fallbackAngle = Infinity;
+
+    for (let i = 0; i < photoMeshes.length; i++) {
+        const mesh = photoMeshes[i];
+        if (!mesh) continue;
+
+        dirToMesh.copy(mesh.position).sub(camera.position).normalize();
         const angle = centerDir.angleTo(dirToMesh);
-        return { index: photoMeshes.indexOf(mesh), angle };
-    });
 
-    candidates.sort((a, b) => a.angle - b.angle);
-
-    let best = candidates[0];
-    if (
-        best &&
-        STATE.lastFocusedIndices.includes(best.index) &&
-        candidates.length > 1 &&
-        candidates[1].angle < 0.5
-    ) {
-        best = candidates[1];
+        if (angle < bestAngle) {
+            fallbackIndex = bestIndex;
+            fallbackAngle = bestAngle;
+            bestIndex = i;
+            bestAngle = angle;
+        } else if (angle < fallbackAngle) {
+            fallbackIndex = i;
+            fallbackAngle = angle;
+        }
     }
 
-    if (!best) return -1;
+    if (bestIndex === -1) return -1;
 
-    STATE.lastFocusedIndices = [best.index];
-    return best.index;
+    const pickedIndex =
+        STATE.lastFocusedIndices.includes(bestIndex) &&
+        fallbackIndex !== -1 &&
+        fallbackAngle < 0.5
+            ? fallbackIndex
+            : bestIndex;
+
+    STATE.lastFocusedIndices = [pickedIndex];
+    return pickedIndex;
 }
 
 function toggleInputMode() {
@@ -895,7 +929,7 @@ function onDocumentClick(event) {
 
     if (intersects.length > 0 && STATE.mode === 'SCATTER') {
         const selected = intersects[0].object;
-        const idx = photoMeshes.indexOf(selected);
+        const idx = getPhotoIndex(selected);
         transitionTo('FOCUS', idx);
     } else if (STATE.mode === 'FOCUS') {
         transitionTo('SCATTER');
@@ -996,6 +1030,7 @@ function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
 
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     composer.setSize(window.innerWidth, window.innerHeight);
 }
