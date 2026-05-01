@@ -135,19 +135,19 @@ function resetStateForOpen() {
 function resetUIForOpen() {
     overlay.style.display = 'block';
     loader.style.display = 'block';
-    loader.textContent = 'INITIALIZING...';
+    loader.textContent = '初始化...';
     document.body.style.overflow = 'hidden';
     statusText.style.color = '#fff';
 
     if (STATE.inputMode === 'GESTURE') {
-        btnInputMode.innerText = '🖐️ 手势模式';
+        btnInputMode.innerText = '手势模式';
         statusText.innerText = '等待手势...';
         gestureGuide.style.display = 'block';
         videoElement.style.opacity = 0.7;
         mouseControls.style.display = 'none';
         if (controlsOrbit) controlsOrbit.enabled = false;
     } else {
-        btnInputMode.innerText = '🖱️ 鼠标模式';
+        btnInputMode.innerText = '鼠标模式';
         statusText.innerText = '鼠标控制中...';
         gestureGuide.style.display = 'none';
         videoElement.style.opacity = 0;
@@ -299,11 +299,11 @@ function syncLoaderWithReadiness() {
     STATE.readyForInput = ready;
     if (!ready) {
         if (!STATE.pipelineReady && !STATE.photosReady) {
-            loader.textContent = 'INITIALIZING...';
+            loader.textContent = '初始化...';
         } else if (!STATE.pipelineReady) {
-            loader.textContent = 'WAITING FOR CAMERA...';
+            loader.textContent = '等待摄像头...';
         } else if (!STATE.photosReady) {
-            loader.textContent = 'LOADING PHOTOS...';
+            loader.textContent = '加载照片...';
         }
     }
     loader.style.display = ready ? 'none' : 'block';
@@ -779,7 +779,7 @@ function onResults(results) {
         }
 
         if (STATE.stableGesture === 'FIST') {
-            statusText.innerText = '✊ 聚树';
+            statusText.innerText = '聚树';
             statusText.style.color = '#d4af37';
 
             if (STATE.mode !== 'TREE') {
@@ -787,7 +787,7 @@ function onResults(results) {
                 STATE.transitionLockUntil = now + CONFIG.gesture.transitionLockMs;
             }
         } else if (STATE.stableGesture === 'OPEN') {
-            statusText.innerText = '🖐 浏览 (张手)';
+            statusText.innerText = '浏览（张手）';
             statusText.style.color = '#fff';
 
             if (STATE.mode === 'TREE' || STATE.mode === 'FOCUS') {
@@ -795,7 +795,7 @@ function onResults(results) {
                 STATE.transitionLockUntil = now + CONFIG.gesture.transitionLockMs;
             }
         } else if (STATE.stableGesture === 'PINCH') {
-            statusText.innerText = '👌 锁定 (捏合)';
+            statusText.innerText = '锁定（捏合）';
             statusText.style.color = '#0f0';
 
             const indexTip = landmarks[8];
@@ -889,7 +889,7 @@ function findBestPhotoToFocus() {
 function toggleInputMode() {
     if (STATE.inputMode === 'GESTURE') {
         STATE.inputMode = 'MOUSE';
-        btnInputMode.innerText = '🖱️ 鼠标模式';
+        btnInputMode.innerText = '鼠标模式';
         statusText.innerText = '鼠标控制中...';
         gestureGuide.style.display = 'none';
         videoElement.style.opacity = 0;
@@ -905,7 +905,7 @@ function toggleInputMode() {
         }
     } else {
         STATE.inputMode = 'GESTURE';
-        btnInputMode.innerText = '🖐️ 手势模式';
+        btnInputMode.innerText = '手势模式';
         statusText.innerText = '等待手势...';
         gestureGuide.style.display = 'block';
         videoElement.style.opacity = 0.7;

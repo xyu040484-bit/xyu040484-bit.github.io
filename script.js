@@ -9,7 +9,7 @@
   const loadPhotoItems = () => {
     if (typeof window.loadPhotoItems === "function") return window.loadPhotoItems();
     return fetch("data/photos.json").then((res) => {
-      if (!res.ok) throw new Error("Failed to load photo data.");
+      if (!res.ok) throw new Error("照片数据加载失败。");
       return res.json();
     });
   };
@@ -511,74 +511,19 @@
   // =========================
   // 8. 摄影画廊 (Thumb 优先)
   // =========================
-  async function renderPhotoGalleryLegacy() {
+  async function renderPhotoGallery() {
     const host = qs("#gallery-modal");
-    if (!host) return; 
+    if (!host) return;
     if (galleryItemsCache && host.children.length) return;
 
     host.innerHTML = '<p class="muted">正在加载照片...</p>';
 
     try {
       const items = await loadPhotoItems();
-      
-      if (!items.length) {
-        host.innerHTML = '<p class="muted">暂无照片</p>';
-        return;
-      }
-
-      // 列表页加载缩略图
-      host.innerHTML = items.map((item, idx) => `
-        <div class="photo-card" data-idx="${idx}">
-          <img src="${item.thumb || item.src}" loading="lazy" alt="${item.title || ''}" />
-        </div>
-      `).join("");
-
-      qsa(".photo-card", host).forEach((card) => {
-        card.addEventListener("click", () => {
-          const idx = card.dataset.idx;
-          openLightbox(items[idx]);
-        });
-      });
-
-    } catch (e) {
-      console.error(e);
-      host.innerHTML = '<p class="muted">加载失败 (请检查 data/photos.json)</p>';
-    }
-  }
-
-  function openLightboxLegacy(item) {
-    const modal = qs("#modal-photo-view");
-    if (!modal) return;
-    
-    const img = qs("#photo-view-img", modal);
-    const title = qs("#photo-view-title", modal);
-    const date = qs("#photo-view-date", modal);
-    const desc = qs("#photo-view-desc", modal);
-
-    if(img) img.src = item.src; // 查看大图用高清图
-    if(title) title.textContent = item.title || "";
-    if(date) date.textContent = item.date || "";
-    if(desc) desc.textContent = item.desc || "";
-    
-    if(typeof openModal === 'function') openModal(modal);
-  }
-
-  // =========================
-  // 9. 启动入口
-  // =========================
-  async function renderPhotoGallery() {
-    const host = qs("#gallery-modal");
-    if (!host) return;
-    if (galleryItemsCache && host.children.length) return;
-
-    host.innerHTML = '<p class="muted">Loading photos...</p>';
-
-    try {
-      const items = await loadPhotoItems();
       galleryItemsCache = items;
 
       if (!items.length) {
-        host.innerHTML = '<p class="muted">No photos yet.</p>';
+        host.innerHTML = '<p class="muted">暂无照片</p>';
         return;
       }
 
@@ -598,7 +543,7 @@
       }
     } catch (e) {
       console.error(e);
-      host.innerHTML = '<p class="muted">Failed to load photos. Check data/photos.json.</p>';
+      host.innerHTML = '<p class="muted">照片加载失败，请检查 data/photos.json。</p>';
     }
   }
 
