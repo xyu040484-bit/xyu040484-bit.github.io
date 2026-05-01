@@ -29,87 +29,87 @@
     <section class="section analysis-hero-section" style="min-height:auto; align-items:flex-start;" data-bg="linear-gradient(135deg,#eef2ff,#e2e8ff)">
       <div class="container">
         <article class="card analysis-hero">
-          <p class="muted">AI 二级界面 / 技术线分析</p>
-          <h2 style="margin-top:0;">把 AI 相关内容从“想法”变成“可维护的站内能力”</h2>
+          <p class="muted">AI 二级界面 / 给浏览者看的技术线分析</p>
+          <h2 style="margin-top:0;">如果你点进来，这里会告诉你我怎么看 AI</h2>
           <p class="lead">
-            这页只做一件事：把当前网站里和 AI 有关的技术线拆清楚。
-            重点不是堆概念，而是看清内容组织、数据加载、交互链路和后续演进方向。
+            这页不讲空话，直接讲这条 AI 线在我这个网站里是怎么放的、怎么用的、为什么要这样放。
+            你可以把它理解成一份面向访客的“AI 说明页”。
           </p>
           <p class="muted">
-            当前站点的 AI 相关部分，实际承担的是内容表达、技术展示和交互实验三种角色。
-            所以这里的分析会偏工程视角，而不是模型科普。
+            如果你只是随便看看，可以直接看下面的卡片。
+            如果你想知道我怎么组织这部分内容，下面也有更细的拆解。
           </p>
 
           <div class="analysis-grid">
             <section class="analysis-card">
               <div class="analysis-label">现状</div>
-              <div class="analysis-title">站点能力边界</div>
+              <div class="analysis-title">AI 在站点里负责什么</div>
               <p>
-                现在的页面是静态站 + GitHub Pages，AI 相关内容没有独立后端。
-                这意味着优先级应该放在结构稳定、加载清晰、内容可扩展，而不是重架构。
+                它不是一个独立的产品页，而是站点里的一个主题分区。
+                作用很简单：让访客知道你为什么关注 AI，以及你是怎么把它放进个人网站的。
               </p>
             </section>
 
             <section class="analysis-card">
               <div class="analysis-label">数据线</div>
-              <div class="analysis-title">统一数据入口</div>
+              <div class="analysis-title">内容怎么组织</div>
               <p>
-                摄影、文章和交互数据已经逐步收敛到统一读取逻辑。
-                对 AI 页面来说，最重要的是保持“单一来源”，避免内容散落在多个文件里。
+                我把 AI 相关内容尽量收进一个清晰入口，避免到处散着看不出重点。
+                访客点进来后，能一眼知道这里讲的是 AI，而不是混在别的板块里。
               </p>
             </section>
 
             <section class="analysis-card">
               <div class="analysis-label">交互线</div>
-              <div class="analysis-title">轻量展示 + 明确跳转</div>
+              <div class="analysis-title">访客怎么读这页</div>
               <p>
-                主页负责入口，二级页负责分析。
-                这样比把所有内容塞进首页更适合后续扩展，也更利于维护阅读节奏。
+                首页只给一个入口，二级页负责展开。
+                这样访客不会在首页被信息压住，也能更顺地往下读。
               </p>
             </section>
 
             <section class="analysis-card">
               <div class="analysis-label">工程线</div>
-              <div class="analysis-title">先整理，再扩展</div>
+              <div class="analysis-title">后面还能怎么长</div>
               <p>
-                现在更应该做的是清理重复逻辑、补齐页面缺口、规范链接命名和内容层级。
-                这些工作看起来朴素，但对长期维护最直接。
+                这套结构以后可以继续往下加 AI 笔记、工具清单、观点更新。
+                先把入口和层级摆清楚，后面扩展才不会乱。
               </p>
             </section>
           </div>
 
           <div class="analysis-card">
             <div class="analysis-label">技术栈</div>
-            <div class="analysis-title">当前站点里的 AI 相关实现</div>
+            <div class="analysis-title">这页是怎么做出来的</div>
             <p>
-              这页的技术栈很轻：`HTML + CSS + 原生 JavaScript + GitHub Pages`。
-              如果继续往 AI 方向扩，当前最适合的补法不是加重框架，而是补清晰的内容层和可复用的数据层。
+              这页是用很轻的方式做的：`HTML + CSS + 原生 JavaScript + GitHub Pages`。
+              对访客来说，它的重点不是技术有多复杂，而是内容是否清楚、入口是否好找、读起来是否顺。
             </p>
             <ul class="analysis-list" style="margin-top:12px;">
-              <li><strong>前端：</strong>首页信息分区、二级页、弹窗和导航都由原生页面完成。</li>
-              <li><strong>交互：</strong>AI 相关入口负责跳转，分析页负责承接内容，不把逻辑堆在首页。</li>
-              <li><strong>扩展：</strong>如果以后要加 AI 笔记、AI 观察或工具清单，可以继续沿这个结构往下长。</li>
+              <li><strong>前端：</strong>页面靠原生 HTML 和 CSS 直接组织内容。</li>
+              <li><strong>体验：</strong>首页看入口，二级页看展开，阅读路径比较直。</li>
+              <li><strong>扩展：</strong>以后加 AI 笔记、观察或工具清单，可以继续沿这个结构往下长。</li>
             </ul>
           </div>
 
           <div class="analysis-split">
             <section class="analysis-block">
-              <h3>技术线拆解</h3>
+              <h3>给浏览者看的拆解</h3>
               <ul class="analysis-list">
-                <li><strong>内容层：</strong>用首页承接入口，用二级页承接详细分析。</li>
-                <li><strong>数据层：</strong>照片、文章、技术说明尽量使用统一的本地资源入口。</li>
-                <li><strong>交互层：</strong>控制“点开后能做什么”，减少一页塞太多功能。</li>
-                <li><strong>部署层：</strong>保持 GitHub Pages 可直接访问，避免依赖复杂构建。</li>
+                <li><strong>你先看到什么：</strong>先看到一个 AI 入口，再进入更完整的分析页。</li>
+                <li><strong>你会读到什么：</strong>我为什么关注 AI、它在站点里怎么出现、后面还能怎么扩。</li>
+                <li><strong>你不用操心什么：</strong>不用懂复杂术语，也不用翻很多层页面。</li>
+                <li><strong>页面怎么保持轻：</strong>继续用 GitHub Pages 直出，不把结构搞重。</li>
               </ul>
             </section>
 
             <section class="analysis-block">
-              <h3>下一步建议</h3>
+              <h3>如果你想继续看下去</h3>
               <ul class="analysis-list">
-                <li>把 AI 相关内容继续拆成“观点页”和“技术分析页”。</li>
-                <li>补一个清晰的内容索引，避免以后页面越堆越难找。</li>
-                <li>继续减少脚本里的重复实现，让首页脚本只做首页该做的事。</li>
-                <li>如果后面要加 AI 文章，再接一个统一目录页，不要散落在首页侧栏里。</li>
+                <li>可以继续看我的 AI 观点，看看我更看重什么。</li>
+                <li>也可以继续往下翻，看看这个站点是怎么把 AI 内容收起来的。</li>
+                <li>如果你关心技术，我会更愿意把它写成可维护的页面，而不是堆概念。</li>
+                <li>如果以后再加内容，我也会尽量保持这个阅读顺序不乱。</li>
               </ul>
             </section>
           </div>
@@ -118,22 +118,22 @@
             <div class="analysis-step">
               <span class="analysis-step-key">01</span>
               <div>
-                <div class="analysis-step-title">收口</div>
-                <p>把当前 AI 入口、技术分析和内容展示分层。</p>
+                <div class="analysis-step-title">先看入口</div>
+                <p>访客先从首页 AI 栏进入，再往下看完整说明。</p>
               </div>
             </div>
             <div class="analysis-step">
               <span class="analysis-step-key">02</span>
               <div>
-                <div class="analysis-step-title">整理</div>
-                <p>统一链接、页面命名和资源加载逻辑。</p>
+                <div class="analysis-step-title">再看内容</div>
+                <p>这里会告诉你我怎么看 AI，也告诉你它在站点里的位置。</p>
               </div>
             </div>
             <div class="analysis-step">
               <span class="analysis-step-key">03</span>
               <div>
-                <div class="analysis-step-title">扩展</div>
-                <p>后续如果继续写 AI 相关内容，直接在这个结构上往下加。</p>
+                <div class="analysis-step-title">最后再扩展</div>
+                <p>后面要加 AI 文章、工具或观察，也可以沿这条线继续长。</p>
               </div>
             </div>
           </div>
