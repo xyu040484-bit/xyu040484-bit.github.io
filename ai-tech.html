@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>xianyu | AI 技术线分析</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="name">xianyu</div>
+        <div class="tagline">AI / 技术线分析</div>
+      </div>
+      <nav class="nav">
+        <a href="index.html">返回首页</a>
+        <a href="index.html#notes">闲时笔谈</a>
+        <a href="index.html#contact">联系</a>
+      </nav>
+      <div class="avatar-wrap" title="头像">
+        <img src="avatar.jpg" alt="头像" class="avatar" />
+      </div>
+    </div>
+    <div class="divider"></div>
+  </header>
+
+  <main class="analysis-page" style="padding-top: var(--header-h);">
+    <section class="section analysis-hero-section" style="min-height:auto; align-items:flex-start;" data-bg="linear-gradient(135deg,#eef2ff,#e2e8ff)">
+      <div class="container">
+        <article class="card analysis-hero">
+          <p class="muted">AI 二级界面 / 技术线分析</p>
+          <h2 style="margin-top:0;">把 AI 相关内容从“想法”变成“可维护的站内能力”</h2>
+          <p class="lead">
+            这页只做一件事：把当前网站里和 AI 有关的技术线拆清楚。
+            重点不是堆概念，而是看清内容组织、数据加载、交互链路和后续演进方向。
+          </p>
+          <p class="muted">
+            当前站点的 AI 相关部分，实际承担的是内容表达、技术展示和交互实验三种角色。
+            所以这里的分析会偏工程视角，而不是模型科普。
+          </p>
+
+          <div class="analysis-grid">
+            <section class="analysis-card">
+              <div class="analysis-label">现状</div>
+              <div class="analysis-title">站点能力边界</div>
+              <p>
+                现在的页面是静态站 + GitHub Pages，AI 相关内容没有独立后端。
+                这意味着优先级应该放在结构稳定、加载清晰、内容可扩展，而不是重架构。
+              </p>
+            </section>
+
+            <section class="analysis-card">
+              <div class="analysis-label">数据线</div>
+              <div class="analysis-title">统一数据入口</div>
+              <p>
+                摄影、文章和交互数据已经逐步收敛到统一读取逻辑。
+                对 AI 页面来说，最重要的是保持“单一来源”，避免内容散落在多个文件里。
+              </p>
+            </section>
+
+            <section class="analysis-card">
+              <div class="analysis-label">交互线</div>
+              <div class="analysis-title">轻量展示 + 明确跳转</div>
+              <p>
+                主页负责入口，二级页负责分析。
+                这样比把所有内容塞进首页更适合后续扩展，也更利于维护阅读节奏。
+              </p>
+            </section>
+
+            <section class="analysis-card">
+              <div class="analysis-label">工程线</div>
+              <div class="analysis-title">先整理，再扩展</div>
+              <p>
+                现在更应该做的是清理重复逻辑、补齐页面缺口、规范链接命名和内容层级。
+                这些工作看起来朴素，但对长期维护最直接。
+              </p>
+            </section>
+          </div>
+
+          <div class="analysis-split">
+            <section class="analysis-block">
+              <h3>技术线拆解</h3>
+              <ul class="analysis-list">
+                <li><strong>内容层：</strong>用首页承接入口，用二级页承接详细分析。</li>
+                <li><strong>数据层：</strong>照片、文章、技术说明尽量使用统一的本地资源入口。</li>
+                <li><strong>交互层：</strong>控制“点开后能做什么”，减少一页塞太多功能。</li>
+                <li><strong>部署层：</strong>保持 GitHub Pages 可直接访问，避免依赖复杂构建。</li>
+              </ul>
+            </section>
+
+            <section class="analysis-block">
+              <h3>下一步建议</h3>
+              <ul class="analysis-list">
+                <li>把 AI 相关内容继续拆成“观点页”和“技术分析页”。</li>
+                <li>补一个清晰的内容索引，避免以后页面越堆越难找。</li>
+                <li>继续减少脚本里的重复实现，让首页脚本只做首页该做的事。</li>
+                <li>如果后面要加 AI 文章，再接一个统一目录页，不要散落在首页侧栏里。</li>
+              </ul>
+            </section>
+          </div>
+
+          <div class="analysis-roadmap">
+            <div class="analysis-step">
+              <span class="analysis-step-key">01</span>
+              <div>
+                <div class="analysis-step-title">收口</div>
+                <p>把当前 AI 入口、技术分析和内容展示分层。</p>
+              </div>
+            </div>
+            <div class="analysis-step">
+              <span class="analysis-step-key">02</span>
+              <div>
+                <div class="analysis-step-title">整理</div>
+                <p>统一链接、页面命名和资源加载逻辑。</p>
+              </div>
+            </div>
+            <div class="analysis-step">
+              <span class="analysis-step-key">03</span>
+              <div>
+                <div class="analysis-step-title">扩展</div>
+                <p>后续如果继续写 AI 相关内容，直接在这个结构上往下加。</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="analysis-actions">
+            <a class="mini-btn" href="index.html">返回首页</a>
+            <a class="mini-btn" href="index.html#notes">查看笔谈</a>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
