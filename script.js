@@ -6,6 +6,40 @@
   // =========================
   function qs(sel, root) { return (root || document).querySelector(sel); }
   function qsa(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
+
+  function setupPhotoDataLoader() {
+    if (typeof window.loadPhotoItems === "function") return;
+
+    const nativeFetch = window.fetch ? window.fetch.bind(window) : null;
+    let cachedItems = Array.isArray(window.PHOTO_DATA) ? window.PHOTO_DATA : null;
+    let pendingPhotoLoad = null;
+
+    window.loadPhotoItems = function () {
+      if (cachedItems) return Promise.resolve(cachedItems);
+      if (pendingPhotoLoad) return pendingPhotoLoad;
+      if (!nativeFetch) {
+        return Promise.reject(new Error("当前浏览器不支持读取照片数据。"));
+      }
+
+      pendingPhotoLoad = nativeFetch("data/photos.json")
+        .then((res) => {
+          if (!res.ok) throw new Error("照片数据加载失败。");
+          return res.json();
+        })
+        .then((items) => {
+          cachedItems = Array.isArray(items) ? items : [];
+          return cachedItems;
+        })
+        .finally(() => {
+          pendingPhotoLoad = null;
+        });
+
+      return pendingPhotoLoad;
+    };
+  }
+
+  setupPhotoDataLoader();
+
   const loadPhotoItems = () => {
     if (typeof window.loadPhotoItems === "function") return window.loadPhotoItems();
     return fetch("data/photos.json").then((res) => {

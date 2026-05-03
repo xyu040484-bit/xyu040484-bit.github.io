@@ -110,7 +110,6 @@
               <div class="side-title">AI</div>
               <div class="side-body">
                 <p>关于 AI：我是 AI 技术的坚定支持者。我认为 AI 不仅仅是工具，更是生产力逻辑的重构者。</p>
-                <p class="muted">备注：（ChatGPT 和 Gemini 真好用。）手动狗头</p>
               </div>
             </aside>
           </div>
@@ -137,7 +136,7 @@
     <div class="modal-panel" role="dialog" aria-modal="true" aria-label="摄影">
       <div class="modal-head">
         <div class="modal-title">摄影</div>
-        <button id="btn-open-gesture" class="icon-btn" style="width:auto; padding:0 12px; margin-right:10px; font-size:14px; border-radius:12px; background:#f0fdf4; color:#16a34a;">
+        <button id="btn-open-gesture" class="icon-btn gesture-open-btn" type="button">
           3D 模式
         </button>
         <button class="icon-btn" type="button" data-close aria-label="关闭">×</button>
@@ -213,7 +212,7 @@
     </div>
   </div>
 
-  <div id="gesture-overlay" style="display:none;">
+  <div id="gesture-overlay">
     <div id="canvas-container"></div>
     <video id="video-input" playsinline></video>
     
@@ -223,14 +222,14 @@
       
       <div id="controls">
         <button id="btn-input-mode" title="切换控制模式">手势模式</button>
-        <div id="mouse-controls" style="display:none; gap:10px;">
+        <div id="mouse-controls">
           <button id="btn-tree" class="action-btn">聚树</button>
           <button id="btn-scatter" class="action-btn">散开</button>
         </div>
-        <button id="btn-close-gesture" style="margin-left:auto;">退出</button>
+        <button id="btn-close-gesture">退出</button>
       </div>
 
-      <div id="gesture-guide" style="margin-top:20px; font-size:0.8em; opacity:0.7; line-height:1.6;">
+      <div id="gesture-guide">
         [手势说明]<br>
         张开: 星空散开<br>
         握拳: 聚成圣诞树<br>
@@ -243,51 +242,6 @@
   </div>
 
   <script src="data/photos.js"></script>
-  <script>
-    (function () {
-      const nativeFetch = window.fetch ? window.fetch.bind(window) : null;
-      let cachedItems = Array.isArray(window.PHOTO_DATA) ? window.PHOTO_DATA : null;
-      let pendingPhotoLoad = null;
-
-      window.loadPhotoItems = function () {
-        if (cachedItems) return Promise.resolve(cachedItems);
-        if (pendingPhotoLoad) return pendingPhotoLoad;
-        if (!nativeFetch) {
-          return Promise.reject(new Error("Fetch is not available in this browser."));
-        }
-
-        pendingPhotoLoad = nativeFetch("data/photos.json")
-          .then(function (res) {
-            if (!res.ok) throw new Error("照片数据加载失败。");
-            return res.json();
-          })
-          .then(function (items) {
-            cachedItems = Array.isArray(items) ? items : [];
-            return cachedItems;
-          })
-          .finally(function () {
-            pendingPhotoLoad = null;
-          });
-
-        return pendingPhotoLoad;
-      };
-
-      if (location.protocol !== "file:" || !cachedItems || !nativeFetch) return;
-
-      window.fetch = function (input, init) {
-        var url = typeof input === "string" ? input : (input && input.url) || "";
-        if (url && /(^|\/)data\/photos\.json(\?|#|$)/.test(url)) {
-          return Promise.resolve(
-            new Response(JSON.stringify(cachedItems), {
-              status: 200,
-              headers: { "Content-Type": "application/json" }
-            })
-          );
-        }
-        return nativeFetch(input, init);
-      };
-    })();
-  </script>
   <script src="script.js"></script>
   <script type="module" src="gesture.js"></script>
 </body>
