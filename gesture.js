@@ -1124,15 +1124,14 @@ function stopGestureSystem() {
     resetGestureStabilizer();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    const openBtn = document.getElementById('btn-open-gesture');
+let gestureInitialized = false;
+
+export function initGestureSystem() {
+    if (gestureInitialized) return;
+
     const closeBtn = document.getElementById('btn-close-gesture');
     const treeBtn = document.getElementById('btn-tree');
     const scatterBtn = document.getElementById('btn-scatter');
-
-    if (openBtn) {
-        openBtn.addEventListener('click', startGestureSystem);
-    }
 
     if (closeBtn) {
         closeBtn.addEventListener('click', stopGestureSystem);
@@ -1149,4 +1148,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (scatterBtn) {
         scatterBtn.addEventListener('click', () => transitionTo('SCATTER'));
     }
-});
+
+    gestureInitialized = true;
+}
+
+export { startGestureSystem, stopGestureSystem };

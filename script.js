@@ -6,18 +6,44 @@
   // =========================
   function qs(sel, root) { return (root || document).querySelector(sel); }
   function qsa(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
+  function normalizePhotoItem(item) {
+    const data = item && typeof item === "object" ? item : {};
+    return {
+      title: typeof data.title === "string" ? data.title.trim() : "",
+      date: typeof data.date === "string" ? data.date.trim() : "",
+      src: typeof data.src === "string" ? data.src.trim() : "",
+      thumb: typeof data.thumb === "string" ? data.thumb.trim() : "",
+      desc: typeof data.desc === "string" ? data.desc.trim() : "",
+    };
+  }
+  function normalizePhotoItems(items) {
+    if (!Array.isArray(items)) return [];
+    return items
+      .map(normalizePhotoItem)
+      .filter((item) => item.src);
+  }
 
   function setupPhotoDataLoader() {
     if (typeof window.loadPhotoItems === "function") return;
 
     const nativeFetch = window.fetch ? window.fetch.bind(window) : null;
-    let cachedItems = Array.isArray(window.PHOTO_DATA) ? window.PHOTO_DATA : null;
+    const fallbackItems = normalizePhotoItems(window.PHOTO_DATA);
+    let cachedItems = null;
     let pendingPhotoLoad = null;
+
+    function remember(items) {
+      cachedItems = normalizePhotoItems(items);
+      return cachedItems;
+    }
 
     window.loadPhotoItems = function () {
       if (cachedItems) return Promise.resolve(cachedItems);
       if (pendingPhotoLoad) return pendingPhotoLoad;
+      if (location.protocol === "file:" && fallbackItems.length) {
+        return Promise.resolve(remember(fallbackItems));
+      }
       if (!nativeFetch) {
+        if (fallbackItems.length) return Promise.resolve(remember(fallbackItems));
         return Promise.reject(new Error("当前浏览器不支持读取照片数据。"));
       }
 
@@ -27,8 +53,13 @@
           return res.json();
         })
         .then((items) => {
-          cachedItems = Array.isArray(items) ? items : [];
-          return cachedItems;
+          const normalized = remember(items);
+          if (!normalized.length && fallbackItems.length) return remember(fallbackItems);
+          return normalized;
+        })
+        .catch((err) => {
+          if (fallbackItems.length) return remember(fallbackItems);
+          throw err;
         })
         .finally(() => {
           pendingPhotoLoad = null;
@@ -45,8 +76,96 @@
     return fetch("data/photos.json").then((res) => {
       if (!res.ok) throw new Error("照片数据加载失败。");
       return res.json();
-    });
+    }).then(normalizePhotoItems);
   };
+
+  const REMOTE_SCRIPT_URLS = [
+    "https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js",
+    "https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js",
+    "https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js",
+    "https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js",
+    "https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js",
+  ];
+  const scriptLoadCache = new Map();
+  let gestureModulePromise = null;
+
+  function loadScriptOnce(src) {
+    if (scriptLoadCache.has(src)) return scriptLoadCache.get(src);
+
+    const promise = new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[src="${src}"]`);
+      if (existing) {
+        if (existing.dataset.ready === "true") {
+          resolve();
+          return;
+        }
+        existing.addEventListener("load", () => resolve(), { once: true });
+        existing.addEventListener("error", () => reject(new Error(`脚本加载失败：${src}`)), { once: true });
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src = src;
+      script.async = true;
+      script.crossOrigin = "anonymous";
+      script.addEventListener("load", () => {
+        script.dataset.ready = "true";
+        resolve();
+      }, { once: true });
+      script.addEventListener("error", () => reject(new Error(`脚本加载失败：${src}`)), { once: true });
+      document.head.appendChild(script);
+    });
+
+    scriptLoadCache.set(src, promise);
+    return promise;
+  }
+
+  async function ensureGestureRuntime() {
+    if (gestureModulePromise) return gestureModulePromise;
+
+    gestureModulePromise = Promise.all(REMOTE_SCRIPT_URLS.map(loadScriptOnce))
+      .then(() => import("./gesture.js"))
+      .then((mod) => {
+        if (typeof mod.initGestureSystem === "function") mod.initGestureSystem();
+        return mod;
+      })
+      .catch((err) => {
+        gestureModulePromise = null;
+        throw err;
+      });
+
+    return gestureModulePromise;
+  }
+
+  function setGestureButtonBusy(button, busy) {
+    if (!button) return;
+    const idleLabel = button.dataset.idleLabel || button.textContent.trim();
+    button.dataset.idleLabel = idleLabel;
+    button.disabled = busy;
+    button.setAttribute("aria-busy", busy ? "true" : "false");
+    button.textContent = busy ? "加载 3D 中..." : idleLabel;
+  }
+
+  function setupGestureEntry() {
+    const button = qs("#btn-open-gesture");
+    if (!button) return;
+
+    button.addEventListener("click", async () => {
+      if (button.disabled) return;
+      setGestureButtonBusy(button, true);
+
+      try {
+        const gestureModule = await ensureGestureRuntime();
+        if (typeof gestureModule.startGestureSystem === "function") {
+          await gestureModule.startGestureSystem();
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setGestureButtonBusy(button, false);
+      }
+    });
+  }
 
   // =========================
   // 1. 核心动画控制 (亮条 + 开场)
@@ -581,6 +700,25 @@
     }
   }
 
+  function scheduleGalleryWarmup() {
+    const warmup = () => {
+      loadPhotoItems()
+        .then((items) => {
+          galleryItemsCache = items;
+        })
+        .catch((err) => {
+          console.error(err);
+        });
+    };
+
+    if ("requestIdleCallback" in window) {
+      window.requestIdleCallback(warmup, { timeout: 1800 });
+      return;
+    }
+
+    window.setTimeout(warmup, 1200);
+  }
+
   function openLightbox(item) {
     const modal = qs("#modal-photo-view");
     if (!modal) return;
@@ -609,10 +747,11 @@
     setupSeasonSwitcher(seasonFxRef);
     
     setupModals();
+    setupGestureEntry();
     setupCenterWheelScroll();
     setupWheelPaging();
-    
-    renderPhotoGallery();
+
+    scheduleGalleryWarmup();
   }
 
   if (document.readyState === "loading") {
